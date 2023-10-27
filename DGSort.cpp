@@ -1,6 +1,7 @@
 ﻿//#define SDL_MAIN_HANDLED
-#define SWIDTH 1280
-#define SHEIGHT 720
+const int SWIDTH = 640;
+const int SHEIGHT = 480;
+const char App_Name[] = "Things Sorting Machine";
 
 #include <iostream>
 #include <string>
@@ -8,6 +9,8 @@
 #include <SDL2/FreeImage.h>
 #include <SDL2/SDL_mixer.h>
 #include <fstream>
+#include <vector>
+#include "SDLApp.h"
 
 using namespace std;
 
@@ -18,16 +21,18 @@ char* generatePath(int num, char* to);
 bool inouttest();
 bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
 
-int LIST_Len; // SORT NUMBER (num of images)
+//int LIST_Len; // SORT NUMBER (num of images)
 ofstream plog;
 
 class SortList {
 public:
-	SortList(int len = LIST_Len) {
-		//SortList1 = (int*)malloc(LIST_Len * sizeof(int));
+	SortList(int len) {
 		SortList1 = new int[len];
 		SortLen = 0;
 		SortMaxLen = len;
+		for (int i = 0; i < SortMaxLen; i++) {
+			SortList1[i] = -1;
+		}
 	}
 	SortList(const SortList &o) {
 		int len = o.SortMaxLen;
@@ -42,9 +47,20 @@ public:
 		delete[] SortList1;
 	}
 	SortList& operator= (int *p);
-	SortList& operator= (SortList list);
-	int length() { return SortLen; }
-	int getelem(int n) {
+	SortList& operator= (const SortList& list);
+	bool operator==(const SortList &list) const {
+		if (list.SortLen != SortLen || list.SortMaxLen != SortMaxLen) {
+			return 0;
+		}
+		for (int i = 0; i < SortLen; i++) {
+			if (SortList1[i] != list.SortList1[i]) {
+				return 0;
+			}
+		}
+		return 1;
+	}
+	int length() const { return SortLen; }
+	int getelem(int n) const {
 		if (n < SortLen && n >= 0) {
 			return SortList1[n];
 		}
@@ -60,7 +76,7 @@ public:
 			SortList1[n] = elem;
 		}
 	}
-	void print() {
+	void print(ofstream &plog) const {
 		plog << "[";
 		for (int i = 0; i < SortLen; i++) {
 			if (i == SortLen - 1) {
@@ -71,14 +87,14 @@ public:
 			}
 		}
 	}
-	SortList slice(int start, int end);
+	SortList slice(int start, int end) const;
 private:
 	int *SortList1;
 	int SortLen;
 	int SortMaxLen;
 };
 
-SortList SortList::slice(int start, int end) {
+SortList SortList::slice(int start, int end) const {
 	SortList res(end-start);
 	for (int i = start; i < end; i++) {
 		res.setelem(i - start, getelem(i));
@@ -93,7 +109,16 @@ SortList& SortList::operator= (int *p) {
 	return *this;
 }
 
-SortList& SortList::operator= (SortList list) {
+SortList& SortList::operator= (const SortList& list) {
+	if (list == *this) {
+		return *this;
+	}
+	if (SortMaxLen != list.SortMaxLen) {
+		delete[] SortList1;
+		SortMaxLen = list.SortMaxLen;
+		SortList1 = new int[SortMaxLen];
+	}
+	SortLen = 0;
 	for (int i = 0; i < list.length(); i++) {
 		setelem(i, list.getelem(i));
 	}
@@ -102,15 +127,14 @@ SortList& SortList::operator= (SortList list) {
 
 class Sort {
 public:
-	bool status;
-	Sort() {
+	Sort(int LIST_Len, ofstream& plog): sortlist(LIST_Len*2, SortList(LIST_Len)) {
 		status = 0;
 		pointer = 1;
 		sortlistlen = 1;
 		TempList = new int[LIST_Len];
 		RecordList = new int[LIST_Len];
-		sortlist = new SortList[LIST_Len*2];
 		parentlist = new int[LIST_Len*2];
+		basic_size = LIST_Len;
 		Fill(TempList, LIST_Len);
 		for (int i = 0; i < LIST_Len; i++) {
 			RecordList[i] = 0;
@@ -136,31 +160,45 @@ public:
 	}
 	~Sort() {
 		delete[] parentlist;
-		delete[] sortlist;
+		sortlist.clear();
 		delete[] RecordList;
 		delete[] TempList;
 	}
 	int returnleft() { return sortlist[leftlist].getelem(leftID); };
 	int returnright() { return sortlist[rightlist].getelem(rightID); };
 	void SortingIter(int choice);
-	SortList getFinalSort() {
+	SortList getFinalSort() const {
 		return sortlist[0];
 	}
 	bool sort_undo();
-	void printfulllist(int len);
-	void printsortlist();
+	void printfulllist(int len) const;
+	void printsortlist() const;
 	void save();
 	void load();
+	bool get_status() const {
+		return status;
+	}
+	int get_size() const {
+		return basic_size;
+	}
 private:
 	void countup(int choice); // 0 - left, 1 - right
+	void Fill(int *arr, int len) {
+		for (int i = 0; i < len; i++) {
+			*arr = i;
+			arr++;
+		}
+	}
 	int pointer;
 	int *TempList;
-	SortList *sortlist;
+	vector<SortList> sortlist;
 	int sortlistlen;
 	int *parentlist;
 	int leftlist, rightlist;
 	int leftID, rightID, recordID;
 	int *RecordList;
+	bool status;
+	int basic_size;
 };
 
 void Sort::save() {
@@ -179,10 +217,10 @@ void Sort::save() {
 		}
 		pnt += sortlist[i].length() + 1;
 	}
-	for (int i = 0; i < LIST_Len; i++) {
+	for (int i = 0; i < basic_size; i++) {
 		data[pnt + i] = RecordList[i];
 	}
-	pnt += LIST_Len;
+	pnt += basic_size;
 	data[pnt] = -1234;
 	for (int i = 0; data[i] != -1234; i++) {
 		savefile << data[i] << "\n";
@@ -221,7 +259,7 @@ void Sort::load() {
 			pnt++;
 		}
 	} // fill every of the sortlistlen lists
-	for (int h = 0; h < LIST_Len; h++) {
+	for (int h = 0; h < basic_size; h++) {
 		RecordList[h] = data[pnt];
 		pnt++;
 	} // recordlist filling
@@ -230,7 +268,7 @@ void Sort::load() {
 		plog << *(ptrs[i1]) << ' ';
 	}
 	printsortlist();
-	for (int l = 0; l < LIST_Len; l++) {
+	for (int l = 0; l < basic_size; l++) {
 		plog << RecordList[l] << ' ';
 	}
 	plog << '\n';
@@ -265,10 +303,10 @@ void Sort::countup(int choice) {
 	recordID++;
 }
 
-void Sort::printsortlist() {
+void Sort::printsortlist() const {
 	plog << "[";
 	for (int i = 0; i < sortlistlen; i++) {
-		sortlist[i].print();
+		sortlist[i].print(plog);
 		if (i != sortlistlen - 1) {
 			plog << ", ";
 		}
@@ -279,7 +317,7 @@ void Sort::printsortlist() {
 	plog << "Length: " << sortlistlen << '\n';
 }
 
-void Sort::printfulllist(int len) {
+void Sort::printfulllist(int len) const {
 	plog << "[";
 	for (int i = 0; i < len; i++) {
 		if (i != len - 1) {
@@ -315,7 +353,7 @@ void Sort::SortingIter(int choice) {
 			rightlist -= 2;
 			leftID = 0;
 			rightID = 0;
-			for (int i = 0; i < LIST_Len; i++) {
+			for (int i = 0; i < basic_size; i++) {
 				RecordList[i] = 0;
 			}
 			recordID = 0;
@@ -327,156 +365,12 @@ void Sort::SortingIter(int choice) {
 	}
 }
 
-class SDLBase {
-public:
-	SDL_Window *window = NULL;
-	SDL_Surface *screenSurface = NULL;
-	SDL_Surface *Image1 = NULL;
-	SDL_Surface *Image2 = NULL;
-	SDL_Surface *Button1 = NULL;
-	SDL_Surface *ButtonSave = NULL;
-	SDL_Surface *ButtonLoad = NULL;
-	SDL_Surface *Images[5] = {Image1, Image2, Button1, ButtonSave, ButtonLoad};
-	SDL_Renderer *renders = NULL;
-	Mix_Chunk *quirk = NULL;
-	Mix_Chunk *quirk2 = NULL;
-	bool success = 1;
-	SDLBase() {
-		success = true;
-		if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0) {
-			plog << "SDL_Error: %s\n", SDL_GetError();
-			success = 0;
-		}
-		else {
-			if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-				plog << "SDL_mixer Error: %s\n", Mix_GetError();
-				success = 0;
-			}
-			else {
-				window = SDL_CreateWindow("Things Sorting Machine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SWIDTH, SHEIGHT, SDL_WINDOW_SHOWN);
-				if (window == NULL) {
-					plog << "SDL_Error: %s\n", SDL_GetError();
-					success = 0;
-				}
-				else {
-					renders = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-					if (renders == NULL) {
-						plog << "Failed to create renderer: " << SDL_GetError() << '\n';
-						success = 0;
-					}
-					else {
-						screenSurface = SDL_GetWindowSurface(window);
-					}
-				}
-			}
-		}
-		quirk = Mix_LoadWAV("images\\GUI\\1.wav");
-		quirk2 = Mix_LoadWAV("images\\GUI\\2.wav");
-		if (!quirk || !quirk2) {
-			plog << "Error: Can't load sfx\n";
-			success = 0;
-		}
-	}
-	SDL_Surface *get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale); // freeimage -> sdlsurface
-	SDL_Surface *loadImage(char *path);
-	void renderer(SDL_Surface *surface, int x = 0, int y = 0, int w = 0, int h = 0, bool leftcenter = 0); // placing images
-	void KillAll();
-};
-
-SDL_Surface *SDLBase::loadImage(char *path) {
-	FREE_IMAGE_FORMAT filetype = FreeImage_GetFileType(path, 0);
-	FIBITMAP *freeimage_bitmap = FreeImage_Load(filetype, path, 0);
-	int is_grayscale = 0;
-	if (FreeImage_GetColorType(freeimage_bitmap) == FIC_MINISBLACK) {
-		// Single channel so ensure image is compressed to 8-bit.
-		is_grayscale = 1;
-		FIBITMAP *tmp_bitmap = FreeImage_ConvertToGreyscale(freeimage_bitmap);
-		FreeImage_Unload(freeimage_bitmap);
-		freeimage_bitmap = tmp_bitmap;
-	}
-	SDL_Surface *sdl_surface = get_sdl_surface(freeimage_bitmap, is_grayscale);
-	return sdl_surface;
-}
-
-void SDLBase::renderer(SDL_Surface *surface, int x, int y, int w, int h, bool leftcenter) {
-	if (w <= 0 || h <= 0) {
-		w = surface->w;
-		h = surface->h;
-	}
-	if (x < 0 || y < 0) {
-		x = 0;
-		y = 0;
-	}
-	if (leftcenter) { // your (x,y) is a center of image
-		x -= w / 2;
-		y -= h / 2;
-	}
-	SDL_Rect TmpRect = {x, y, w, h};
-	SDL_Texture *texture = SDL_CreateTextureFromSurface(renders, surface);
-	if (texture == NULL) {
-		plog << "Failed to load image as texture\n";
-	}
-	SDL_RenderCopy(renders, texture, NULL, &TmpRect);
-	SDL_DestroyTexture(texture);
-}
-
-SDL_Surface* SDLBase::get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale) {
-	FreeImage_FlipVertical(freeimage_bitmap);
-	SDL_Surface *sdl_surface = SDL_CreateRGBSurfaceFrom(
-		FreeImage_GetBits(freeimage_bitmap),
-		FreeImage_GetWidth(freeimage_bitmap),
-		FreeImage_GetHeight(freeimage_bitmap),
-		FreeImage_GetBPP(freeimage_bitmap),
-		FreeImage_GetPitch(freeimage_bitmap),
-		FreeImage_GetRedMask(freeimage_bitmap),
-		FreeImage_GetGreenMask(freeimage_bitmap),
-		FreeImage_GetBlueMask(freeimage_bitmap),
-		0
-	);
-	if (sdl_surface == NULL) {
-		plog << "Failed to create surface: " << SDL_GetError() << '\n';
-		return sdl_surface;
-	}
-	if (is_grayscale) {
-		// To display a grayscale image we need to create a custom palette.
-		SDL_Color colors[256];
-		int i;
-		for (i = 0; i < 256; i++) {
-			colors[i].r = colors[i].g = colors[i].b = i;
-		}
-		SDL_SetPaletteColors(sdl_surface->format->palette, colors, 0, 256);
-	}
-	return sdl_surface;
-}
-
-void SDLBase::KillAll() {
-	Mix_FreeChunk(quirk);
-	quirk = NULL;
-	Mix_FreeChunk(quirk2);
-	quirk2 = NULL;
-	plog << "Destroyed sfx\n";
-	for (int i = 0; i < (sizeof(Images) / sizeof(Images[0])); i++) {
-		SDL_FreeSurface(Images[i]);
-		Images[i] = NULL;
-	}
-	plog << "Destroyed images\n";
-	SDL_SetRenderDrawColor(renders, 0xFF, 0xFF, 0xFF, 0xFF);
-	SDL_RenderClear(renders);
-	SDL_DestroyRenderer(renders);
-	plog << "Destroyed renderer\n";
-	SDL_FreeSurface(screenSurface);
-	SDL_DestroyWindow(window);
-	window = NULL;
-	plog << "Destroyed window\n";
-	SDL_Quit();
-	plog << "Destroyed SDL Init\n";
-}
-
 void CreateResults(Sort& sort);
-SDLBase *call_app(SDLBase *curapp);
+SDLBase *call_app(SDLBase *curapp, int LIST_Len);
 
 int main(int argc, char* argv[]) {
 	char read[10];
+	int LIST_Len;
 	SDLBase *output = nullptr;
 	plog.open("log.txt", ios::app);
 	fstream file1;
@@ -510,29 +404,29 @@ int main(int argc, char* argv[]) {
 	}
 	do {
 		plog << "Starting App...\n";
-		output = call_app(output);
+		output = call_app(output, LIST_Len);
 	} while (output != nullptr);
 	plog.close();
 	return 0;
 }
 
-SDLBase* call_app(SDLBase* curapp) {
+SDLBase* call_app(SDLBase* curapp, int LIST_Len) {
 	int menu = 0;
 	bool quit = 0;
 	int mx, my;
 	int buttonwidth;
 	int buttonheight;
 	char path[20];
-	Sort DR;
+	Sort DR(LIST_Len, plog);
 	SDL_Event e;
 	SDLBase *App1;
 	if (curapp == nullptr) {
-		App1 = new SDLBase;
+		App1 = new SDLBase(plog);
 	}
 	else {
 		App1 = curapp;
 	}
-	if (!App1->success) {
+	if (!App1->get_success_state()) {
 		plog << "Error: Application cannot be run\n";
 	}
 	// menu section
@@ -673,7 +567,7 @@ SDLBase* call_app(SDLBase* curapp) {
 				}
 				DR.SortingIter(choice);
 				choice = -1;
-				if (!DR.status) {
+				if (!DR.get_status()) {
 					App1->Image1 = App1->loadImage(generatePath(DR.returnleft() + 1, path));
 					App1->Image2 = App1->loadImage(generatePath(DR.returnright() + 1, path));
 					plog << "Doing (" << DR.returnleft() << "), (" << DR.returnright() << ") choice\n";
@@ -697,7 +591,7 @@ SDLBase* call_app(SDLBase* curapp) {
 			}
 		}
 		// end of sorting, results
-		if (DR.status) {
+		if (DR.get_status()) {
 			CreateResults(DR);
 			quit = 0;
 			SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -744,6 +638,7 @@ bool inouttest() {
 }
 
 void CreateResults(Sort &sort) {
+	int LIST_Len = sort.get_size();
 	int w = 0; int h = 0;
 	int sqr = 1 + (int)sqrt(LIST_Len);
 	char path[50];
@@ -797,13 +692,6 @@ char* generatePath(int num, char* to) {
 		to[i] = temp[i];
 	}
 	return to;
-}
-
-void Fill(int *arr, int len) {
-	for (int i = 0; i < len; i++) {
-		*arr = i;
-		arr++;
-	}
 }
 
 void separate(int size, int row, int columns) {
