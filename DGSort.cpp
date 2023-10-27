@@ -1,11 +1,9 @@
 ﻿//#define SDL_MAIN_HANDLED
-#define SWIDTH 640
-#define SHEIGHT 480
+#define SWIDTH 1280
+#define SHEIGHT 720
 
 #include <iostream>
-#include <Magick++.h>
 #include <string>
-#include <GL/glew.h>
 #include <SDL2/SDL.h>
 #include <SDL2/FreeImage.h>
 #include <SDL2/SDL_mixer.h>
@@ -500,10 +498,10 @@ int main(int argc, char* argv[]) {
 	setlocale(0, "");
 	SDL_SetMainReady();
 	try {
-		Magick::InitializeMagick(*argv);
+		FreeImage_Initialise();
 	}
 	catch (...) {
-		plog << "No Magick installed.\n";
+		plog << "FreeImage not working.\n";
 		return 1;
 	}
 	if (inouttest()) {
@@ -732,48 +730,52 @@ SDLBase* call_app(SDLBase* curapp) {
 }
 
 bool inouttest() {
-	Magick::Image img1;
+	FIBITMAP *img1;
 	try {
-		img1.read("giantimage.png");
-		img1.write("images\\GUI\\test.png");
-		img1.read("images\\GUI\\test.png");
+		img1 = FreeImage_Load(FIF_PNG, "giantimage.png", PNG_DEFAULT);
+		FreeImage_Save(FIF_PNG, img1, "images\\GUI\\test.png", PNG_DEFAULT);
+		img1 = FreeImage_Load(FIF_PNG, "images\\GUI\\test.png", PNG_DEFAULT);
 	}
-	catch (Magick::Exception &error_) {
-		plog << "PNG Problems: " << error_.what() << endl;
+	catch (...) {
+		plog << "PNG Problems: " << endl;
 		return 1;
 	}
 	return 0;
 }
 
-void CreateResults(Sort& sort) {
+void CreateResults(Sort &sort) {
 	int w = 0; int h = 0;
-	int sqr = 1+(int)sqrt(LIST_Len);
-	string path;
-	Magick::Image res;
+	int sqr = 1 + (int)sqrt(LIST_Len);
+	char path[50];
+	int basew = 0, baseh = 0;
+	FIBITMAP *res;
 	try {
-		Magick::Image *all = new Magick::Image[LIST_Len];
+		FIBITMAP **all = new FIBITMAP * [LIST_Len];
 		for (int i = 0; i < LIST_Len; i++) {
-			path = "images\\";
-			path.append(to_string(i + 1));
-			path.append(".png");
-			all[i].read(path);
+			generatePath(i + 1, path);
+			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
 			if (!w || !h) {
-				w = all[i].columns()*sqr;
-				h = all[i].rows()*sqr;
+				w = FreeImage_GetWidth(all[i]) * sqr;
+				h = FreeImage_GetHeight(all[i]) * sqr;
 			}
 		}
-		res.size(Magick::Geometry(w, h));
-		res.magick("PNG");
-		res.negate();
+		res = FreeImage_Allocate(w, h, 32, 0, 0, 0);
 		SortList Res = sort.getFinalSort();
+		basew = FreeImage_GetWidth(all[0]);
+		baseh = FreeImage_GetHeight(all[0]);
 		for (int i = 0; i < LIST_Len; i++) {
-			res.composite(all[Res.getelem(i)], all[0].columns() * (i % sqr), (i / sqr) * all[0].rows());
+			//res.composite(all[Res.getelem(i)], all[0].columns() * (i % sqr), (i / sqr) * all[0].rows());
+			cout << FreeImage_Paste(res, all[Res.getelem(i)], basew * (i % sqr), baseh * (i / sqr), 255);
 		}
-		res.write("result.png");
+		FreeImage_Save(FIF_PNG, res, "result.png", PNG_DEFAULT);
 		plog << "Result.png was created!\n";
+		for (int i = 0; i < LIST_Len; i++) {
+			FreeImage_Unload(all[i]);
+		}
 		delete[] all;
+		FreeImage_Unload(res);
 	}
-	catch (Magick::Exception &error_) {
+	catch (...) {
 		plog << "Error: Problem with either \"images/N.png\" files or \"result\".png!\n";
 	}
 }
@@ -805,30 +807,33 @@ void Fill(int *arr, int len) {
 }
 
 void separate(int size, int row, int columns) {
-	Magick::Image *imgset = new Magick::Image[size];
-	//for (int i = 0; i < size; i++) {
-	//	imgset[i].magick("JPG");
-	//}
+	FIBITMAP **imgset = new FIBITMAP * [size];
+	FIBITMAP *from = FreeImage_Load(FIF_PNG, "giantimage.png", PNG_DEFAULT);
+	if (columns == 0 || row == 0) {
+		plog << "Cols, rows cannot be 0" << endl;
+		return;
+	}
+	int width = FreeImage_GetWidth(from) / columns;
+	int height = FreeImage_GetHeight(from) / row;
+	if (width == 0 || height == 0) {
+		plog << "Imgsize cannot be 0" << endl;
+		return;
+	}
 	try {
-		string path;
-		int width = 0;
-		int height = 0;
+		char path[50];
 		for (int i = 0; i < size; i++) {
-			path = "images\\";
-			imgset[i].read("giantimage.png");
-			if (!width || !height) {
-				width = imgset[i].columns()/columns;
-				height = imgset[i].rows()/row;
-			}
-			imgset[i].crop(Magick::Geometry(width, height, width * (i % columns), (i / columns) * height));
-			path.append(to_string(i + 1));
-			path.append(".png");
-			imgset[i].write(path);
+			imgset[i] = FreeImage_Copy(from, width * (i % columns), (i / columns) * height, width * (i % columns) + width, (i / columns) * height + height);
+			generatePath(i + 1, path);
+			FreeImage_Save(FIF_PNG, imgset[i], path, PNG_DEFAULT);
 		}
 	}
-	catch (Magick::Exception &error_)
+	catch (...)
 	{
-		plog << "Caught exception: " << error_.what() << endl;
+		plog << "Caught exception. " << endl;
+	}
+	FreeImage_Unload(from);
+	for (int i = 0; i < size; i++) {
+		FreeImage_Unload(imgset[i]);
 	}
 	delete[] imgset;
 }
