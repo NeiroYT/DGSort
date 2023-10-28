@@ -23,12 +23,39 @@ bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is you
 ofstream plog;
 
 void CreateResults(Sort& sort);
-SDLBase *call_app(SDLBase *curapp, int LIST_Len);
+
+class Application {
+public:
+	Application() {
+		status = 0; quit = 0; mx = 0; my = 0; buttonwidth = 0; buttonheight = 0;
+		DR = nullptr; App1 = nullptr;
+		e = nullptr; plog = nullptr;
+		path[0] = '\0';
+	}
+	int Init(int LIST_Len, ofstream &plog);
+	int Routine();
+private:
+	int menu_section();
+	int sheet_section();
+	int sort_section();
+	int res_section();
+	int status;
+	bool quit;
+	int mx, my;
+	int buttonwidth;
+	int buttonheight;
+	char path[20];
+	Sort *DR;
+	SDL_Event *e;
+	SDLBase *App1;
+	ofstream *plog;
+};
 
 int main(int argc, char* argv[]) {
 	char read[10];
 	int LIST_Len;
-	SDLBase *output = nullptr;
+	int output;
+	Application a1;
 	plog.open("log.txt", ios::app);
 	fstream file1;
 	plog << "\n---Neiro's Things Sorting Machine---\n";
@@ -61,40 +88,76 @@ int main(int argc, char* argv[]) {
 	}
 	do {
 		plog << "Starting App...\n";
-		output = call_app(output, LIST_Len);
-	} while (output != nullptr);
+		output = a1.Init(LIST_Len, plog);
+		if (output == 1) {
+			break;
+		}
+		output = a1.Routine();
+	} while (output == 1);
 	plog.close();
 	return 0;
 }
 
-SDLBase* call_app(SDLBase* curapp, int LIST_Len) {
-	int menu = 0;
-	bool quit = 0;
-	int mx, my;
-	int buttonwidth;
-	int buttonheight;
-	char path[20];
-	Sort DR(LIST_Len, plog);
-	SDL_Event e;
-	SDLBase *App1;
-	if (curapp == nullptr) {
-		App1 = new SDLBase(plog);
+int Application::Init(int LIST_Len, ofstream &plog) {
+	status = 0; quit = 0; mx = 0; my = 0; buttonwidth = 0; buttonheight = 0;
+	this->plog = &plog;
+	try {
+		if (DR != nullptr) {
+			delete DR;
+		}
+		DR = new Sort(LIST_Len, plog);
+		if (e != nullptr) {
+			delete e;
+		}
+		e = new SDL_Event;
 	}
-	else {
-		App1 = curapp;
+	catch (...) {
+		plog << "Application: smth happened" << endl;
+		return 1;
+	}
+	return 0;
+}
+
+int Application::Routine() {
+	int code;
+	if (App1 == nullptr) {
+		App1 = new SDLBase(*plog);
 	}
 	if (!App1->get_success_state()) {
-		plog << "Error: Application cannot be run\n";
+		*plog << "Error: Application cannot be run\n";
+		return 0;
 	}
-	// menu section
-	App1->Image1 = App1->loadImage((char*)"images\\GUI\\menu.png");
+	try {
+		// menu section
+		code = menu_section();
+		// sheet section
+		if (status == 1) {
+			code = sheet_section();
+		}
+		// sort section
+		if (status == 2) {
+			code = sort_section();
+			if (DR->get_status()) {
+				code = res_section();
+			}
+		}
+	}
+	catch (int i) { // 0 - close, 1 - restart
+		return i;
+	}
+	App1->KillAll();
+	return 0;
+}
+
+int Application::menu_section() {
+	App1->Image1 = App1->loadImage((char *)"images\\GUI\\menu.png");
 	if (!App1->Image1) {
-		plog << "Error: Failed menu (?)\n";
+		*plog << "Error: Failed menu (?)\n";
 	}
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
-	while (!quit && !menu) {
-		SDL_PollEvent(&e);
-		switch (e.type) {
+	while (!quit && status == 0) {
+		SDL_PollEvent(e);
+		switch (e->type) {
 		case SDL_QUIT:
 			quit = 1;
 			break;
@@ -102,11 +165,11 @@ SDLBase* call_app(SDLBase* curapp, int LIST_Len) {
 			SDL_GetMouseState(&mx, &my);
 			if (mx >= 386 && mx <= 614) {
 				if (my >= 173 && my <= 228) {
-					menu = 1;
+					status = 2;
 					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
 				else if (my >= 273 && my <= 328) {
-					menu = 2;
+					status = 1;
 					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
 			}
@@ -121,163 +184,162 @@ SDLBase* call_app(SDLBase* curapp, int LIST_Len) {
 	}
 	if (quit) {
 		App1->KillAll();
-		return nullptr;
+		throw 0;
 	}
-	// sheet section
-	if (menu == 2) {
-		char rows[10]; char cols[10]; int r; int c;
-		ifstream readfile;
-		readfile.open("config.ini");
-		if (!readfile) {
-			plog << "Error: config.ini needs to be with your .exe";
-			return nullptr;
-		}
-		readfile.ignore(1000, '\n');
-		readfile.getline(rows, 10);
-		readfile.getline(cols, 10);
-		readfile.close();
-		r = atoi(rows); c = atoi(cols);
-		if (r && c) {
-			separate(LIST_Len, r, c);
-			plog << LIST_Len << " files were created in \"images\" folder\n";
-			return App1;
-		}
-		App1->Image1 = App1->loadImage((char *)"images\\GUI\\sheetalg.png");
-		App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
-		if (!App1->Image1 || !App1->Button1) {
-			plog << "Failed sheet image (?)\n";
-			return nullptr;
-		}
-		else {
-			buttonwidth = App1->Button1->w / 2;
-			buttonheight = App1->Button1->h / 2;
-		}
-		while (!quit) {
-			SDL_PollEvent(&e);
-			switch (e.type) {
-			case SDL_QUIT:
-				quit = 1;
-			case SDL_MOUSEBUTTONDOWN:
-				SDL_GetMouseState(&mx, &my);
-				if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
-					Mix_PlayChannel(-1, App1->quirk, 0);
-					return App1;
-				}
-			default:
-				if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
-					SDL_RenderClear(App1->renders);
-					App1->renderer(App1->Image1);
-					App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
-					SDL_RenderPresent(App1->renders);
-				}
+	return 2;
+}
+int Application::sheet_section() {
+	char rows[10]; char cols[10]; int r; int c;
+	ifstream readfile;
+	readfile.open("config.ini");
+	if (!readfile) {
+		*plog << "Error: config.ini needs to be with your .exe";
+		throw 0;
+	}
+	readfile.ignore(1000, '\n');
+	readfile.getline(rows, 10);
+	readfile.getline(cols, 10);
+	readfile.close();
+	r = atoi(rows); c = atoi(cols);
+	if (r && c) {
+		separate(DR->get_size(), r, c);
+		*plog << DR->get_size() << " files were created in \"images\" folder\n";
+		throw 1;
+	}
+	App1->Image1 = App1->loadImage((char *)"images\\GUI\\sheetalg.png");
+	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
+	if (!App1->Image1 || !App1->Button1) {
+		*plog << "Failed sheet image (?)\n";
+		throw 0;
+	}
+	else {
+		buttonwidth = App1->Button1->w / 2;
+		buttonheight = App1->Button1->h / 2;
+	}
+	while (!quit) {
+		SDL_PollEvent(e);
+		switch (e->type) {
+		case SDL_QUIT:
+			quit = 1;
+		case SDL_MOUSEBUTTONDOWN:
+			SDL_GetMouseState(&mx, &my);
+			if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
+				Mix_PlayChannel(-1, App1->quirk, 0);
+				throw 1;
+			}
+		default:
+			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
+				SDL_RenderClear(App1->renders);
+				App1->renderer(App1->Image1);
+				App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
+				SDL_RenderPresent(App1->renders);
 			}
 		}
-		App1->KillAll();
-		return nullptr;
 	}
-	// sort section
-	App1->Image1 = App1->loadImage(generatePath(DR.returnleft()+1, path));
-	App1->Image2 = App1->loadImage(generatePath(DR.returnright()+1, path));
-	App1->Button1 = App1->loadImage((char*)"images\\GUI\\bigundobutton.png");
+	App1->KillAll();
+	throw 0;
+}
+int Application::sort_section() {
+	App1->Image1 = App1->loadImage(generatePath(DR->returnleft() + 1, path));
+	App1->Image2 = App1->loadImage(generatePath(DR->returnright() + 1, path));
+	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigundobutton.png");
 	App1->ButtonSave = App1->loadImage((char *)"images\\GUI\\savebutton.png");
 	App1->ButtonLoad = App1->loadImage((char *)"images\\GUI\\loadbutton.png");
 	buttonwidth = App1->Button1->w / 2;
 	buttonheight = App1->Button1->h / 2;
 	int choice = -1;
 	if (!App1->Image1 || !App1->Image2 || !App1->Button1 || !App1->ButtonSave || !App1->ButtonLoad) {
-		plog << "Error: Can't open images\n";
+		*plog << "Error: Can't open images\n";
+		throw 0;
 	}
-	else {
-		while (!quit) {
-			SDL_PollEvent(&e);
-			switch (e.type) {
-			case SDL_QUIT:
-				quit = 1;
-				break;
-			case SDL_MOUSEBUTTONDOWN:
-				SDL_GetMouseState(&mx, &my);
-				if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 2, SHEIGHT - 35)) {
-					plog << "Button detected\n";
-					if (DR.sort_undo()) {
-						Mix_PlayChannel(-1, App1->quirk2, 0);
-					}
-				}
-				else if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 4, SHEIGHT - 35)) {
-					plog << "Save button detected\n";
-					DR.save();
+	while (!quit) {
+		SDL_PollEvent(e);
+		switch (e->type) {
+		case SDL_QUIT:
+			quit = 1;
+			break;
+		case SDL_MOUSEBUTTONDOWN:
+			SDL_GetMouseState(&mx, &my);
+			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 2, SHEIGHT - 35)) {
+				*plog << "Button detected\n";
+				if (DR->sort_undo()) {
 					Mix_PlayChannel(-1, App1->quirk2, 0);
-				}
-				else if (mouseinrange(mx, my, buttonwidth, buttonheight, 3 * SWIDTH / 4, SHEIGHT - 35)) {
-					plog << "Load button detected\n";
-					DR.load();
-					Mix_PlayChannel(-1, App1->quirk2, 0);
-				}
-				else {
-					if (mx < SWIDTH / 2 - 5 && my < SHEIGHT-75) {
-						choice = 0;
-						Mix_PlayChannel(-1, App1->quirk, 0);
-					}
-					else if (mx > SWIDTH / 2 + 5 && my < SHEIGHT-75) {
-						choice = 1;
-						Mix_PlayChannel(-1, App1->quirk, 0);
-					}
-				}
-				DR.SortingIter(choice);
-				choice = -1;
-				if (!DR.get_status()) {
-					App1->Image1 = App1->loadImage(generatePath(DR.returnleft() + 1, path));
-					App1->Image2 = App1->loadImage(generatePath(DR.returnright() + 1, path));
-					plog << "Doing (" << DR.returnleft() << "), (" << DR.returnright() << ") choice\n";
-				}
-				else { quit = 1; }
-				break;
-			default:
-				if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
-					SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
-					SDL_RenderClear(App1->renders);
-					SDL_SetRenderDrawColor(App1->renders, 0, 0, 0, SDL_ALPHA_OPAQUE);
-					SDL_RenderDrawLine(App1->renders, SWIDTH / 2, 0, SWIDTH / 2, SHEIGHT - 75);
-					SDL_RenderDrawLine(App1->renders, 0, SHEIGHT - 75, SWIDTH, SHEIGHT - 75);
-					App1->renderer(App1->Image1, SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
-					App1->renderer(App1->Image2, 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
-					App1->renderer(App1->Button1, SWIDTH / 2, SHEIGHT - 35, buttonwidth, buttonheight, 1);
-					App1->renderer(App1->ButtonSave, SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
-					App1->renderer(App1->ButtonLoad, 3 * SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
-					SDL_RenderPresent(App1->renders);
 				}
 			}
-		}
-		// end of sorting, results
-		if (DR.get_status()) {
-			CreateResults(DR);
-			quit = 0;
-			SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
-			App1->Image1 = App1->loadImage((char*)"images\\GUI\\success.png");
-			App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
-			while (!quit) {
-				SDL_PollEvent(&e);
-				switch (e.type) {
-				case SDL_QUIT:
-					quit = 1;
-				case SDL_MOUSEBUTTONDOWN:
-					SDL_GetMouseState(&mx, &my);
-					if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
-						Mix_PlayChannel(-1, App1->quirk, 0);
-						return App1;
-					}
-				default:
-					if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
-						SDL_RenderClear(App1->renders);
-						App1->renderer(App1->Image1);
-						App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
-						SDL_RenderPresent(App1->renders);
-					}
+			else if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 4, SHEIGHT - 35)) {
+				*plog << "Save button detected\n";
+				DR->save();
+				Mix_PlayChannel(-1, App1->quirk2, 0);
+			}
+			else if (mouseinrange(mx, my, buttonwidth, buttonheight, 3 * SWIDTH / 4, SHEIGHT - 35)) {
+				*plog << "Load button detected\n";
+				DR->load();
+				Mix_PlayChannel(-1, App1->quirk2, 0);
+			}
+			else {
+				if (mx < SWIDTH / 2 - 5 && my < SHEIGHT - 75) {
+					choice = 0;
+					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
+				else if (mx > SWIDTH / 2 + 5 && my < SHEIGHT - 75) {
+					choice = 1;
+					Mix_PlayChannel(-1, App1->quirk, 0);
+				}
+			}
+			DR->SortingIter(choice);
+			choice = -1;
+			if (!DR->get_status()) {
+				App1->Image1 = App1->loadImage(generatePath(DR->returnleft() + 1, path));
+				App1->Image2 = App1->loadImage(generatePath(DR->returnright() + 1, path));
+				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
+			}
+			else { quit = 1; }
+			break;
+		default:
+			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
+				SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
+				SDL_RenderClear(App1->renders);
+				SDL_SetRenderDrawColor(App1->renders, 0, 0, 0, SDL_ALPHA_OPAQUE);
+				SDL_RenderDrawLine(App1->renders, SWIDTH / 2, 0, SWIDTH / 2, SHEIGHT - 75);
+				SDL_RenderDrawLine(App1->renders, 0, SHEIGHT - 75, SWIDTH, SHEIGHT - 75);
+				App1->renderer(App1->Image1, SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
+				App1->renderer(App1->Image2, 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
+				App1->renderer(App1->Button1, SWIDTH / 2, SHEIGHT - 35, buttonwidth, buttonheight, 1);
+				App1->renderer(App1->ButtonSave, SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
+				App1->renderer(App1->ButtonLoad, 3 * SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
+				SDL_RenderPresent(App1->renders);
 			}
 		}
 	}
-	App1->KillAll();
-	return nullptr;
+	return 2;
+}
+int Application::res_section() {
+	CreateResults(*DR);
+	quit = 0;
+	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
+	App1->Image1 = App1->loadImage((char *)"images\\GUI\\success.png");
+	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
+	while (!quit) {
+		SDL_PollEvent(e);
+		switch (e->type) {
+		case SDL_QUIT:
+			quit = 1;
+		case SDL_MOUSEBUTTONDOWN:
+			SDL_GetMouseState(&mx, &my);
+			if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
+				Mix_PlayChannel(-1, App1->quirk, 0);
+				throw 1;
+			}
+		default:
+			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
+				SDL_RenderClear(App1->renders);
+				App1->renderer(App1->Image1);
+				App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
+				SDL_RenderPresent(App1->renders);
+			}
+		}
+	}
+	return 2;
 }
 
 bool inouttest() {
