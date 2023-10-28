@@ -4,6 +4,7 @@ const int SHEIGHT = 480;
 const char App_Name[] = "Things Sorting Machine";
 
 #include <string>
+#include <vector>
 #include <SDL2/SDL.h>
 #include <SDL2/FreeImage.h>
 #include <SDL2/SDL_mixer.h>
@@ -18,11 +19,14 @@ void separate(int size, int row, int columns); // size - amount of images, row -
 char* generatePath(int num, char* to);
 bool inouttest();
 bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
+void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
+vector<int> num_to_vector(int num);
 
 //int LIST_Len; // SORT NUMBER (num of images)
 ofstream plog;
 
 void CreateResults(Sort& sort);
+void CreateResultsNumeric(Sort &sort);
 
 class Application {
 public:
@@ -201,7 +205,7 @@ int Application::sheet_section() {
 	readfile.getline(cols, 10);
 	readfile.close();
 	r = atoi(rows); c = atoi(cols);
-	if (r && c) {
+	if (r && c && (r*c==DR->get_size())) {
 		separate(DR->get_size(), r, c);
 		*plog << DR->get_size() << " files were created in \"images\" folder\n";
 		throw 1;
@@ -258,7 +262,8 @@ int Application::sort_section() {
 		case SDL_QUIT:
 			quit = 1;
 			break;
-		case SDL_MOUSEBUTTONDOWN:
+		//case SDL_MOUSEBUTTONDOWN:
+		default:
 			SDL_GetMouseState(&mx, &my);
 			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 2, SHEIGHT - 35)) {
 				*plog << "Button detected\n";
@@ -294,8 +299,8 @@ int Application::sort_section() {
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
 			else { quit = 1; }
-			break;
-		default:
+			//break;
+		//default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 				SDL_RenderClear(App1->renders);
@@ -314,7 +319,7 @@ int Application::sort_section() {
 	return 2;
 }
 int Application::res_section() {
-	CreateResults(*DR);
+	CreateResultsNumeric(*DR);
 	quit = 0;
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 	App1->Image1 = App1->loadImage((char *)"images\\GUI\\success.png");
@@ -359,7 +364,7 @@ bool inouttest() {
 void CreateResults(Sort &sort) {
 	int LIST_Len = sort.get_size();
 	int w = 0; int h = 0;
-	int sqr = 1 + (int)sqrt(LIST_Len);
+	int sqr = 1 + (int)sqrt(LIST_Len-1);
 	char path[50];
 	int basew = 0, baseh = 0;
 	FIBITMAP *res;
@@ -369,14 +374,14 @@ void CreateResults(Sort &sort) {
 			generatePath(i + 1, path);
 			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
 			if (!w || !h) {
+				basew = FreeImage_GetWidth(all[i]);
 				w = FreeImage_GetWidth(all[i]) * sqr;
+				baseh = FreeImage_GetHeight(all[i]);
 				h = FreeImage_GetHeight(all[i]) * sqr;
 			}
 		}
 		res = FreeImage_Allocate(w, h, 32, 0, 0, 0);
 		SortList Res = sort.getFinalSort();
-		basew = FreeImage_GetWidth(all[0]);
-		baseh = FreeImage_GetHeight(all[0]);
 		for (int i = 0; i < LIST_Len; i++) {
 			//res.composite(all[Res.getelem(i)], all[0].columns() * (i % sqr), (i / sqr) * all[0].rows());
 			plog << Res.getelem(i) << " - " << FreeImage_Paste(res, all[Res.getelem(i)], basew * (i % sqr), baseh * (i / sqr), 255) << endl;
@@ -392,6 +397,117 @@ void CreateResults(Sort &sort) {
 	catch (...) {
 		plog << "Error: Problem with either \"images/N.png\" files or \"result\".png!\n";
 	}
+}
+
+void CreateResultsNumeric(Sort &sort) {
+	int LIST_Len = sort.get_size();
+	int w = 0; int h = 0;
+	int sqr = 1 + (int)sqrt(LIST_Len-1);
+	char path[50];
+	int basew = 0, baseh = 0;
+	int tablw = 0, tablh = 0;
+	FIBITMAP *res;
+	try {
+		FIBITMAP **all = new FIBITMAP * [LIST_Len];
+		FIBITMAP **alltabl = new FIBITMAP * [LIST_Len];
+		for (int i = 0; i < LIST_Len; i++) {
+			generatePath(i + 1, path);
+			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
+			if (!w || !h) {
+				w = FreeImage_GetWidth(all[i]) * sqr;
+				basew = FreeImage_GetWidth(all[i]);
+				h = FreeImage_GetHeight(all[i]) * sqr;
+				baseh = FreeImage_GetHeight(all[i]);
+			}
+		}
+		tablw = basew;
+		try {
+			for (int i = 0; i < LIST_Len; i++) {
+				init_table(alltabl[i], i + 1, tablw);
+				if (!tablh) {
+					tablh = FreeImage_GetHeight(alltabl[i]);
+				}
+			}
+		}
+		catch (...) {
+			plog << "Table Geneation: Smth happened!" << endl;
+		}
+		h += sqr * tablh;
+		baseh += tablh;
+		res = FreeImage_Allocate(w, h, 32, 0, 0, 0);
+		SortList Res = sort.getFinalSort();
+		for (int i = 0; i < LIST_Len; i++) {
+			//res.composite(all[Res.getelem(i)], all[0].columns() * (i % sqr), (i / sqr) * all[0].rows());
+			plog << Res.getelem(i) << " - " << FreeImage_Paste(res, alltabl[i], basew * (i % sqr), baseh * (i / sqr), 255) << " - ";
+			plog << FreeImage_Paste(res, all[Res.getelem(i)], basew * (i % sqr), baseh * (i / sqr) + tablh, 255) << endl;
+		}
+		FreeImage_Save(FIF_PNG, res, "result.png", PNG_DEFAULT);
+		plog << "Result.png was created!\n";
+		for (int i = 0; i < LIST_Len; i++) {
+			FreeImage_Unload(alltabl[i]);
+			FreeImage_Unload(all[i]);
+		}
+		delete[] alltabl;
+		delete[] all;
+		FreeImage_Unload(res);
+	}
+	catch (...) {
+		plog << "Error: Problem with either \"images/N.png\" files or \"result\".png!\n";
+	}
+}
+
+void init_table(FIBITMAP* &img, int place, int width) {
+	vector<int> truenum;
+	FIBITMAP *nums = FreeImage_Load(FIF_PNG, "images\\GUI\\numbers.png", PNG_DEFAULT);
+	FIBITMAP *curdigit;
+	int numsw = FreeImage_GetWidth(nums);
+	double numsw_each = numsw / 10;
+	int numsh = FreeImage_GetHeight(nums);
+	int tablw = numsw * 1.056; // special
+	int tablh = numsh / 0.65; // proportion
+	FIBITMAP *tempmask = FreeImage_Allocate(tablw, tablh, 32, 0, 0, 0);
+	FIBITMAP *res = FreeImage_Load(FIF_PNG, "images\\GUI\\boxexample.png", PNG_DEFAULT);
+	res = FreeImage_Rescale(res, tablw, tablh, FILTER_BILINEAR);
+	int coordy = (tablh - numsh) / 2; // center
+	truenum = num_to_vector(place);
+	int digits_count = truenum.size();
+	if (digits_count > 10) {
+		plog << "Table: Problem with sizing" << endl;
+	}
+	int coordx = (tablw - digits_count * numsw_each) / 2;
+	for (int i = 0; i < digits_count; i++) {
+		curdigit = FreeImage_Copy(nums, numsw_each * truenum[i], 0, numsw_each * (truenum[i] + 1), numsh);
+		FreeImage_Paste(tempmask, curdigit, coordx + numsw_each * i, coordy, 255);
+		FreeImage_Unload(curdigit);
+	}
+	res = FreeImage_Composite(tempmask, 0, 0, res);
+	res = FreeImage_Rescale(res, width, (int)tablh * width / tablw, FILTER_BILINEAR);
+	img = res;
+	FreeImage_Unload(tempmask);
+}
+
+vector<int> num_to_vector(int num) {
+	vector<int> res;
+	int pos_10s_prev = 1;
+	int pos_10s = 10;
+	int mod1;
+	if (num == 0) {
+		return vector<int>(1,0);
+	}
+	while (num != 0) {
+		mod1 = num % pos_10s;
+		res.push_back(mod1/pos_10s_prev);
+		num -= mod1;
+		pos_10s *= 10;
+		pos_10s_prev *= 10;
+	}
+	int N = res.size();
+	for (int i = 0; i < N / 2; i++) {
+		int tmp = res[i];
+		res[i] = res[N - 1 - i];
+		res[N - 1 - i] = tmp;
+	}
+	return res;
 }
 
 bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy) {
