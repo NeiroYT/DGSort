@@ -79,6 +79,7 @@ public:
 		return success;
 	}
 	SDL_Surface *loadImage(char *path);
+	SDL_Surface *loadImage(FIBITMAP *freeimage_bitmap);
 	void renderer(SDL_Surface *surface, int x = 0, int y = 0, int w = 0, int h = 0, bool leftcenter = 0); // placing images
 	void KillAll();
 private:

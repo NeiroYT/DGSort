@@ -15,6 +15,19 @@ SDL_Surface *SDLBase::loadImage(char *path) {
 	return sdl_surface;
 }
 
+SDL_Surface *SDLBase::loadImage(FIBITMAP* freeimage_bitmap) {
+	int is_grayscale = 0;
+	if (FreeImage_GetColorType(freeimage_bitmap) == FIC_MINISBLACK) {
+		// Single channel so ensure image is compressed to 8-bit.
+		is_grayscale = 1;
+		FIBITMAP *tmp_bitmap = FreeImage_ConvertToGreyscale(freeimage_bitmap);
+		FreeImage_Unload(freeimage_bitmap);
+		freeimage_bitmap = tmp_bitmap;
+	}
+	SDL_Surface *sdl_surface = get_sdl_surface(freeimage_bitmap, is_grayscale);
+	return sdl_surface;
+}
+
 void SDLBase::renderer(SDL_Surface *surface, int x, int y, int w, int h, bool leftcenter) {
 	if (w <= 0 || h <= 0) {
 		w = surface->w;
@@ -48,7 +61,7 @@ SDL_Surface *SDLBase::get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_graysca
 		FreeImage_GetRedMask(freeimage_bitmap),
 		FreeImage_GetGreenMask(freeimage_bitmap),
 		FreeImage_GetBlueMask(freeimage_bitmap),
-		0
+		4278190080
 	);
 	if (sdl_surface == nullptr) {
 		*plog << "Failed to create surface: " << SDL_GetError() << '\n';

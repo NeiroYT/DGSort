@@ -3,6 +3,7 @@ const int SWIDTH = 640;
 const int SHEIGHT = 480;
 const char App_Name[] = "Things Sorting Machine";
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include <SDL2/SDL.h>
@@ -11,6 +12,7 @@ const char App_Name[] = "Things Sorting Machine";
 #include <fstream>
 #include "SDLApp.h"
 #include "SortMachine.h"
+#include "nfd/nfd.h"
 
 using namespace std;
 
@@ -21,6 +23,9 @@ bool inouttest();
 bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
 vector<int> num_to_vector(int num);
+FIBITMAP *num_to_image(int num);
+void saveresized(vector<FIBITMAP *> &imgs);
+int getlenfromfile();
 
 //int LIST_Len; // SORT NUMBER (num of images)
 ofstream plog;
@@ -43,6 +48,7 @@ private:
 	int sheet_section();
 	int sort_section();
 	int res_section();
+	int single_section();
 	int status;
 	bool quit;
 	int mx, my;
@@ -56,26 +62,15 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-	char read[10];
 	int LIST_Len;
 	int output;
 	Application a1;
 	plog.open("log.txt", ios::app);
-	fstream file1;
-	plog << "\n---Neiro's Things Sorting Machine---\n";
-	file1.open("config.ini");
-	if (!file1 || !plog) {
-		plog << "Error: config.ini and log.txt needs to be with your .exe";
-		return 1;
+	try {
+		LIST_Len = getlenfromfile();
 	}
-	file1.getline(read, 10);
-	file1.close();
-	LIST_Len = atoi(read);
-	if (!LIST_Len) {
-		file1.open("config.ini", ios::out);
-		file1.write("2\n2\n1\nPlease enter your number of images, rows, columns here (instead of this)", 79);
-		file1.close();
-		LIST_Len = 2;
+	catch (int i) {
+		return 1;
 	}
 	setlocale(0, "");
 	SDL_SetMainReady();
@@ -92,6 +87,12 @@ int main(int argc, char* argv[]) {
 	}
 	do {
 		plog << "Starting App...\n";
+		try {
+			LIST_Len = getlenfromfile();
+		}
+		catch (int i) {
+			return 1;
+		}
 		output = a1.Init(LIST_Len, plog);
 		if (output == 1) {
 			break;
@@ -100,6 +101,28 @@ int main(int argc, char* argv[]) {
 	} while (output == 1);
 	plog.close();
 	return 0;
+}
+
+int getlenfromfile() {
+	int LIST_Len;
+	char read[10];
+	fstream file1;
+	plog << "\n---Neiro's Things Sorting Machine---\n";
+	file1.open("config.ini");
+	if (!file1 || !plog) {
+		plog << "Error: config.ini and log.txt needs to be with your .exe";
+		throw 1;
+	}
+	file1.getline(read, 10);
+	file1.close();
+	LIST_Len = atoi(read);
+	if (!LIST_Len) {
+		file1.open("config.ini", ios::out);
+		file1.write("2\n2\n1\nPlease enter your number of images, rows, columns here (instead of this)", 79);
+		file1.close();
+		LIST_Len = 2;
+	}
+	return LIST_Len;
 }
 
 int Application::Init(int LIST_Len, ofstream &plog) {
@@ -134,16 +157,19 @@ int Application::Routine() {
 	try {
 		// menu section
 		code = menu_section();
-		// sheet section
-		if (status == 1) {
-			code = sheet_section();
-		}
 		// sort section
-		if (status == 2) {
+		if (status == 1) {
 			code = sort_section();
 			if (DR->get_status()) {
 				code = res_section();
 			}
+		}
+		// sort section
+		if (status == 2) {
+			code = sheet_section();
+		}
+		if (status == 3) {
+			code = single_section();
 		}
 	}
 	catch (int i) { // 0 - close, 1 - restart
@@ -168,12 +194,16 @@ int Application::menu_section() {
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
 			if (mx >= 386 && mx <= 614) {
-				if (my >= 173 && my <= 228) {
+				if (my >= 148 && my <= 203) {
+					status = 1;
+					Mix_PlayChannel(-1, App1->quirk, 0);
+				}
+				else if (my >= 248 && my <= 303) {
 					status = 2;
 					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
-				else if (my >= 273 && my <= 328) {
-					status = 1;
+				else if (my >= 348 && my <= 403) {
+					status = 3;
 					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
 			}
@@ -205,7 +235,7 @@ int Application::sheet_section() {
 	readfile.getline(cols, 10);
 	readfile.close();
 	r = atoi(rows); c = atoi(cols);
-	if (r && c && (r*c==DR->get_size())) {
+	if (r && c && (r*c>=DR->get_size())) {
 		separate(DR->get_size(), r, c);
 		*plog << DR->get_size() << " files were created in \"images\" folder\n";
 		throw 1;
@@ -262,8 +292,8 @@ int Application::sort_section() {
 		case SDL_QUIT:
 			quit = 1;
 			break;
-		//case SDL_MOUSEBUTTONDOWN:
-		default:
+		case SDL_MOUSEBUTTONDOWN:
+		//default:
 			SDL_GetMouseState(&mx, &my);
 			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 2, SHEIGHT - 35)) {
 				*plog << "Button detected\n";
@@ -299,8 +329,8 @@ int Application::sort_section() {
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
 			else { quit = 1; }
-			//break;
-		//default:
+			break;
+		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 				SDL_RenderClear(App1->renders);
@@ -347,6 +377,83 @@ int Application::res_section() {
 	return 2;
 }
 
+int Application::single_section() {
+	int i = 0;
+	nfdpathset_t *paths = new nfdpathset_t;
+	string curpath;
+	nfdresult_t ret;
+	vector<FIBITMAP *> images;
+	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
+	FIBITMAP *num = num_to_image(i);
+	App1->Image2 = App1->loadImage(num);
+	App1->Image1 = App1->loadImage((char *)"images\\GUI\\single.png");
+	App1->ButtonLoad = App1->loadImage((char *)"images\\GUI\\loadbutton.png");
+	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
+	if (!App1->Image1 || !App1->Button1 || !App1->ButtonLoad) {
+		*plog << "Failed sheet image (?)\n";
+		throw 0;
+	}
+	else {
+		buttonwidth = App1->Button1->w;
+		buttonheight = App1->Button1->h;
+	}
+	while (!quit) {
+		SDL_PollEvent(e);
+		switch (e->type) {
+		case SDL_QUIT:
+			quit = 1;
+		case SDL_MOUSEBUTTONDOWN:
+			SDL_GetMouseState(&mx, &my);
+			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH/2, SHEIGHT/2)) {
+				Mix_PlayChannel(-1, App1->quirk, 0);
+				ret = NFD_OpenDialogMultiple("png", "C:", paths);
+				if (ret == 1) {
+					for (int j = 0; j < NFD_PathSet_GetCount(paths); j++) {
+						images.push_back(FreeImage_Load(FIF_PNG, NFD_PathSet_GetPath(paths, j), PNG_DEFAULT));
+					}
+					Mix_PlayChannel(-1, App1->quirk, 0);
+					i += NFD_PathSet_GetCount(paths);
+					FreeImage_Unload(num);
+					num = num_to_image(i);
+					App1->Image2 = App1->loadImage(num);
+				}
+			}
+			if (mouseinrange(mx, my, buttonwidth/2, buttonheight/2, 555, 444)) {
+				Mix_PlayChannel(-1, App1->quirk, 0);
+				ofstream readfile;
+				readfile.open("config.ini");
+				if (!readfile) {
+					*plog << "Error: config.ini error";
+					for (int j = 0; j < images.size(); j++) {
+						FreeImage_Unload(images[j]);
+					}
+					throw 0;
+				}
+				readfile << i << endl;
+				readfile.close();
+				saveresized(images);
+				for (int j = 0; j < images.size(); j++) {
+					FreeImage_Unload(images[j]);
+				}
+				throw 1;
+			}
+		default:
+			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
+				SDL_RenderClear(App1->renders);
+				App1->renderer(App1->Image1);
+				App1->renderer(App1->ButtonLoad, SWIDTH/2, SHEIGHT/2, buttonwidth, buttonheight, 1);
+				App1->renderer(App1->Button1, 555, 444, buttonwidth/2, buttonheight/2, 1);
+				App1->renderer(App1->Image2, 355, 328, App1->Image2->w/2, App1->Image2->h/2, 1);
+				SDL_RenderPresent(App1->renders);
+			}
+		}
+	}
+	for (int j = 0; j < images.size(); j++) {
+		FreeImage_Unload(images[j]);
+	}
+	delete paths;
+}
+
 bool inouttest() {
 	FIBITMAP *img1;
 	try {
@@ -359,6 +466,35 @@ bool inouttest() {
 		return 1;
 	}
 	return 0;
+}
+
+void saveresized(vector<FIBITMAP *> &imgs) {
+	FIBITMAP *tmp;
+	int sum_size = 0;
+	int tmpw, tmph;
+	char path[50];
+	for (int i = 0; i < imgs.size(); i++) {
+		tmpw = FreeImage_GetWidth(imgs[i]);
+		tmph = FreeImage_GetHeight(imgs[i]);
+		if (tmpw < tmph) {
+			sum_size += tmpw;
+		}
+		else {
+			sum_size += tmph;
+		}
+	}
+	sum_size /= imgs.size();
+	try {
+		for (int i = 0; i < imgs.size(); i++) {
+			tmp = FreeImage_Rescale(imgs[i], sum_size, sum_size, FILTER_BILINEAR);
+			generatePath(i + 1, path);
+			FreeImage_Save(FIF_PNG, tmp, path);
+			FreeImage_Unload(tmp);
+		}
+	}
+	catch (...) {
+		plog << "Saveresized caught exception" << endl;
+	}
 }
 
 void CreateResults(Sort &sort) {
@@ -459,7 +595,7 @@ void CreateResultsNumeric(Sort &sort) {
 void init_table(FIBITMAP* &img, int place, int width) {
 	vector<int> truenum;
 	FIBITMAP *nums = FreeImage_Load(FIF_PNG, "images\\GUI\\numbers.png", PNG_DEFAULT);
-	FIBITMAP *curdigit;
+	FIBITMAP *block_of_nums;
 	int numsw = FreeImage_GetWidth(nums);
 	double numsw_each = numsw / 10;
 	int numsh = FreeImage_GetHeight(nums);
@@ -471,19 +607,36 @@ void init_table(FIBITMAP* &img, int place, int width) {
 	int coordy = (tablh - numsh) / 2; // center
 	truenum = num_to_vector(place);
 	int digits_count = truenum.size();
+	int coordx = (tablw - digits_count * numsw_each) / 2;
+	block_of_nums = num_to_image(place);
+	FreeImage_Paste(tempmask, block_of_nums, coordx, coordy, 255);
+	res = FreeImage_Composite(tempmask, 0, 0, res);
+	res = FreeImage_Rescale(res, width, (int)tablh * width / tablw, FILTER_BILINEAR);
+	FreeImage_Unload(block_of_nums);
+	FreeImage_Unload(tempmask);
+	FreeImage_Unload(nums);
+	img = res;
+}
+
+FIBITMAP *num_to_image(int num) {
+	FIBITMAP *nums = FreeImage_Load(FIF_PNG, "images\\GUI\\numbers.png", PNG_DEFAULT);
+	FIBITMAP *curdigit;
+	double numsw_each = FreeImage_GetWidth(nums)/10;
+	int numsh = FreeImage_GetHeight(nums);
+	FIBITMAP *res;
+	vector<int> truenum = num_to_vector(num);
+	int digits_count = truenum.size();
 	if (digits_count > 10) {
 		plog << "Table: Problem with sizing" << endl;
 	}
-	int coordx = (tablw - digits_count * numsw_each) / 2;
+	res = FreeImage_Allocate(digits_count * numsw_each, numsh, 32, 0, 0, 0);
 	for (int i = 0; i < digits_count; i++) {
 		curdigit = FreeImage_Copy(nums, numsw_each * truenum[i], 0, numsw_each * (truenum[i] + 1), numsh);
-		FreeImage_Paste(tempmask, curdigit, coordx + numsw_each * i, coordy, 255);
+		FreeImage_Paste(res, curdigit, numsw_each * i, 0, 255);
 		FreeImage_Unload(curdigit);
 	}
-	res = FreeImage_Composite(tempmask, 0, 0, res);
-	res = FreeImage_Rescale(res, width, (int)tablh * width / tablw, FILTER_BILINEAR);
-	img = res;
-	FreeImage_Unload(tempmask);
+	FreeImage_Unload(nums);
+	return res;
 }
 
 vector<int> num_to_vector(int num) {
