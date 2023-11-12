@@ -1,4 +1,4 @@
-﻿//#define SDL_MAIN_HANDLED
+﻿#define SDL_MAIN_HANDLED
 const int SWIDTH = 640;
 const int SHEIGHT = 480;
 const char App_Name[] = "Things Sorting Machine";
@@ -266,6 +266,9 @@ int Application::sheet_section() {
 	throw 0;
 }
 int Application::sort_section() {
+	if (DR->get_size() < 2) {
+		throw 1;
+	}
 	App1->Image1 = App1->loadImage(generatePath(DR->returnleft() + 1, path));
 	App1->Image2 = App1->loadImage(generatePath(DR->returnright() + 1, path));
 	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigundobutton.png");
@@ -400,10 +403,11 @@ int Application::single_section() {
 				ret = NFD_OpenDialogMultiple("png", "C:", paths);
 				if (ret == 1) {
 					string tmppath;
+					wchar_t *inputstring;
 					for (int j = 0; j < NFD_PathSet_GetCount(paths); j++) {
 						// convert to wchar for other languages (windows only)
 						tmppath = NFD_PathSet_GetPath(paths, j);
-						wchar_t *inputstring = new wchar_t[tmppath.length()];
+						inputstring = new wchar_t[tmppath.length()+1];
 						size_t wstring_len;
 						wstring_len = MultiByteToWideChar(CP_UTF8, 0, &tmppath[0], tmppath.length(), inputstring, tmppath.length());
 						inputstring[wstring_len] = L'\0';
@@ -477,6 +481,9 @@ void saveresized(vector<FIBITMAP *> &imgs) {
 	int sum_size = 0;
 	int tmpw, tmph;
 	char path[50];
+	if (imgs.size() == 0) {
+		return;
+	}
 	for (int i = 0; i < imgs.size(); i++) {
 		tmpw = FreeImage_GetWidth(imgs[i]);
 		tmph = FreeImage_GetHeight(imgs[i]);
