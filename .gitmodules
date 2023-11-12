@@ -1,0 +1,8 @@
+[submodule "thirdparty/SDL2"]
+	path = thirdparty/SDL2
+	url = https://github.com/libsdl-org/SDL
+	branch = SDL2
+[submodule "thirdparty/SDL2_mixer"]
+	path = thirdparty/SDL2_mixer
+	url = https://github.com/libsdl-org/SDL_mixer
+	branch = SDL2
