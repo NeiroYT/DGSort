@@ -1,9 +1,8 @@
 #pragma once
 
-#include <SDL2/SDL.h>
-#include <SDL2/FreeImage.h>
-#include <SDL2/SDL_mixer.h>
-#include <algorithm>
+#include <SDL3/SDL.h>
+#include <FreeImage/FreeImage.h>
+#include <SDL3/SDL_mixer.h>
 #include <fstream>
 
 extern const int SWIDTH;

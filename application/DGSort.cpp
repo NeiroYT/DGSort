@@ -6,13 +6,11 @@ const char App_Name[] = "Things Sorting Machine";
 #include <iostream>
 #include <string>
 #include <vector>
-#include <SDL2/SDL.h>
-#include <SDL2/FreeImage.h>
-#include <SDL2/SDL_mixer.h>
+#include <Windows.h>
 #include <fstream>
+#include <nfd/nfd.h>
 #include "SDLApp.h"
 #include "SortMachine.h"
-#include "nfd/nfd.h"
 
 using namespace std;
 
@@ -66,12 +64,6 @@ int main(int argc, char* argv[]) {
 	int output;
 	Application a1;
 	plog.open("log.txt", ios::app);
-	try {
-		LIST_Len = getlenfromfile();
-	}
-	catch (int i) {
-		return 1;
-	}
 	setlocale(0, "");
 	SDL_SetMainReady();
 	try {
@@ -85,8 +77,8 @@ int main(int argc, char* argv[]) {
 		plog << "Error: Program doesn't have access to giantimage.png OR can't create files for you\n";
 		return 1;
 	}
+	plog << "Starting App...\n";
 	do {
-		plog << "Starting App...\n";
 		try {
 			LIST_Len = getlenfromfile();
 		}
@@ -380,7 +372,6 @@ int Application::res_section() {
 int Application::single_section() {
 	int i = 0;
 	nfdpathset_t *paths = new nfdpathset_t;
-	string curpath;
 	nfdresult_t ret;
 	vector<FIBITMAP *> images;
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -408,8 +399,21 @@ int Application::single_section() {
 				Mix_PlayChannel(-1, App1->quirk, 0);
 				ret = NFD_OpenDialogMultiple("png", "C:", paths);
 				if (ret == 1) {
+					string tmppath;
 					for (int j = 0; j < NFD_PathSet_GetCount(paths); j++) {
-						images.push_back(FreeImage_Load(FIF_PNG, NFD_PathSet_GetPath(paths, j), PNG_DEFAULT));
+						// convert to wchar for other languages (windows only)
+						tmppath = NFD_PathSet_GetPath(paths, j);
+						wchar_t *inputstring = new wchar_t[tmppath.length()];
+						size_t wstring_len;
+						wstring_len = MultiByteToWideChar(CP_UTF8, 0, &tmppath[0], tmppath.length(), inputstring, tmppath.length());
+						inputstring[wstring_len] = L'\0';
+						try {
+							images.push_back(FreeImage_LoadU(FIF_PNG, inputstring, PNG_DEFAULT));
+						}
+						catch (const exception &e) {
+							*plog << "Exception: " << e.what() << endl;
+						}
+						delete[] inputstring;
 					}
 					Mix_PlayChannel(-1, App1->quirk, 0);
 					i += NFD_PathSet_GetCount(paths);
