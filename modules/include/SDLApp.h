@@ -2,7 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <FreeImage/FreeImage.h>
-#include <SDL3/SDL_mixer.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <fstream>
 
 extern const int SWIDTH;
