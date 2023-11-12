@@ -17,7 +17,6 @@ using namespace std;
 //basic functions
 void separate(int size, int row, int columns); // size - amount of images, row - ysqrnum, columns - xsqrnum
 char* generatePath(int num, char* to);
-bool inouttest();
 bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
 vector<int> num_to_vector(int num);
@@ -73,10 +72,6 @@ int main(int argc, char* argv[]) {
 		plog << "FreeImage not working.\n";
 		return 1;
 	}
-	if (inouttest()) {
-		plog << "Error: Program doesn't have access to giantimage.png OR can't create files for you\n";
-		return 1;
-	}
 	plog << "Starting App...\n";
 	do {
 		try {
@@ -102,7 +97,10 @@ int getlenfromfile() {
 	plog << "\n---Neiro's Things Sorting Machine---\n";
 	file1.open("config.ini");
 	if (!file1 || !plog) {
-		plog << "Error: config.ini and log.txt needs to be with your .exe";
+		plog << "Error: config.ini and log.txt need to be with your .exe";
+		fstream file2;
+		file2.open("config.ini", ios::app);
+		file2.close();
 		throw 1;
 	}
 	file1.getline(read, 10);
@@ -460,20 +458,6 @@ int Application::single_section() {
 		FreeImage_Unload(images[j]);
 	}
 	delete paths;
-}
-
-bool inouttest() {
-	FIBITMAP *img1;
-	try {
-		img1 = FreeImage_Load(FIF_PNG, "giantimage.png", PNG_DEFAULT);
-		FreeImage_Save(FIF_PNG, img1, "images\\GUI\\test.png", PNG_DEFAULT);
-		img1 = FreeImage_Load(FIF_PNG, "images\\GUI\\test.png", PNG_DEFAULT);
-	}
-	catch (...) {
-		plog << "PNG Problems: " << endl;
-		return 1;
-	}
-	return 0;
 }
 
 void saveresized(vector<FIBITMAP *> &imgs) {
