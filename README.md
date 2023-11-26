@@ -1,6 +1,6 @@
 # DGSort
 Sorting anything, but at the very start it was Danganronpa Sort.  
-Built mostly for Windows x86.  
+Built mostly for ***Windows x86*** (Win32).  
 Based on [old th sort](http://mainyan.sakura.ne.jp/thsort.html).  
 
 # Usage
@@ -13,5 +13,6 @@ Cmake is presented. If there are problems you can just create this project yours
 * SDL2_mixer.dll and lib
 * nfd.lib/nfd_d.lib; nfd.h (those are already here)
 
+Will be cross-platform if i understand how to write your own CMakeLists for external projects (nfd and FreeImage)
 
 Can be useful when you're bored of these tier lists. ~1000 lines of code
