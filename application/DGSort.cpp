@@ -1,6 +1,7 @@
 ﻿#define SDL_MAIN_HANDLED
 const int SWIDTH = 640;
 const int SHEIGHT = 480;
+const int MAX_PATH_LEN = 50;
 const char App_Name[] = "Things Sorting Machine";
 
 #include <iostream>
@@ -8,7 +9,7 @@ const char App_Name[] = "Things Sorting Machine";
 #include <vector>
 #include <Windows.h>
 #include <fstream>
-#include <nfd/nfd.h>
+#include "nfd/nfd.h"
 #include "SDLApp.h"
 #include "SortMachine.h"
 
@@ -16,13 +17,14 @@ using namespace std;
 
 //basic functions
 void separate(int size, int row, int columns); // size - amount of images, row - ysqrnum, columns - xsqrnum
-char* generatePath(int num, char* to);
-bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
+char* generate_path(int num, char* to);
+bool mouse_is_in_range(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
+bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
 vector<int> num_to_vector(int num);
 FIBITMAP *num_to_image(int num);
-void saveresized(vector<FIBITMAP *> &imgs);
-int getlenfromfile();
+void save_resized(vector<FIBITMAP *> &imgs);
+int get_len_from_file();
 
 //int LIST_Len; // SORT NUMBER (num of images)
 ofstream plog;
@@ -33,7 +35,7 @@ void CreateResultsNumeric(Sort &sort);
 class Application {
 public:
 	Application() {
-		status = 0; quit = 0; mx = 0; my = 0; buttonwidth = 0; buttonheight = 0;
+		status = 0; quit = 0; mx = 0; my = 0;
 		DR = nullptr; App1 = nullptr;
 		e = nullptr; plog = nullptr;
 		path[0] = '\0';
@@ -49,8 +51,6 @@ private:
 	int status;
 	bool quit;
 	int mx, my;
-	int buttonwidth;
-	int buttonheight;
 	char path[20];
 	Sort *DR;
 	SDL_Event *e;
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
 	plog << "Starting App...\n";
 	do {
 		try {
-			LIST_Len = getlenfromfile();
+			LIST_Len = get_len_from_file();
 		}
 		catch (int i) {
 			return 1;
@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-int getlenfromfile() {
+int get_len_from_file() {
 	int LIST_Len;
 	char read[10];
 	fstream file1;
@@ -116,7 +116,7 @@ int getlenfromfile() {
 }
 
 int Application::Init(int LIST_Len, ofstream &plog) {
-	status = 0; quit = 0; mx = 0; my = 0; buttonwidth = 0; buttonheight = 0;
+	status = 0; quit = 0; mx = 0; my = 0;
 	this->plog = &plog;
 	try {
 		if (DR != nullptr) {
@@ -170,8 +170,9 @@ int Application::Routine() {
 }
 
 int Application::menu_section() {
-	App1->Image1 = App1->loadImage((char *)"images\\GUI\\menu.png");
-	if (!App1->Image1) {
+	App1->clear_objects();
+	bool menu_correct = App1->append_object(RegularObject((char*)"images\\GUI\\menu.png", "menu"));
+	if (!menu_correct) {
 		*plog << "Error: Failed menu (?)\n";
 	}
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -183,6 +184,7 @@ int Application::menu_section() {
 			break;
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
+			// png menu
 			if (mx >= 386 && mx <= 614) {
 				if (my >= 148 && my <= 203) {
 					status = 1;
@@ -197,11 +199,12 @@ int Application::menu_section() {
 					Mix_PlayChannel(-1, App1->quirk, 0);
 				}
 			}
+			//
 			break;
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_RenderClear(App1->renders);
-				App1->renderer(App1->Image1);
+				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
 		}
@@ -213,6 +216,7 @@ int Application::menu_section() {
 	return 2;
 }
 int Application::sheet_section() {
+	App1->clear_objects();
 	char rows[10]; char cols[10]; int r; int c;
 	ifstream readfile;
 	readfile.open("config.ini");
@@ -230,16 +234,16 @@ int Application::sheet_section() {
 		*plog << DR->get_size() << " files were created in \"images\" folder\n";
 		throw 1;
 	}
-	App1->Image1 = App1->loadImage((char *)"images\\GUI\\sheetalg.png");
-	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
-	if (!App1->Image1 || !App1->Button1) {
+	bool sheet_correct = App1->append_object(RegularObject((char*)"images\\GUI\\sheetalg.png", "sheet algo"));
+	bool button_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigokbutton.png", "ok button"));
+	if (!sheet_correct || !button_correct) {
 		*plog << "Failed sheet image (?)\n";
 		throw 0;
 	}
-	else {
-		buttonwidth = App1->Button1->w / 2;
-		buttonheight = App1->Button1->h / 2;
-	}
+	RegularObject& button = App1->get_regular("ok button");
+	int buttonwidth = button.get_surface()->w / 2;
+	int buttonheight = button.get_surface()->h / 2;
+	button.set_rect(573, 461, buttonwidth, buttonheight, true);
 	while (!quit) {
 		SDL_PollEvent(e);
 		switch (e->type) {
@@ -247,15 +251,14 @@ int Application::sheet_section() {
 			quit = 1;
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
-			if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
+			if (mouse_is_in_range(mx, my, button)) {
 				Mix_PlayChannel(-1, App1->quirk, 0);
 				throw 1;
 			}
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_RenderClear(App1->renders);
-				App1->renderer(App1->Image1);
-				App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
+				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
 		}
@@ -264,21 +267,26 @@ int Application::sheet_section() {
 	throw 0;
 }
 int Application::sort_section() {
+	App1->clear_objects();
 	if (DR->get_size() < 2) {
 		throw 1;
 	}
-	App1->Image1 = App1->loadImage(generatePath(DR->returnleft() + 1, path));
-	App1->Image2 = App1->loadImage(generatePath(DR->returnright() + 1, path));
-	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigundobutton.png");
-	App1->ButtonSave = App1->loadImage((char *)"images\\GUI\\savebutton.png");
-	App1->ButtonLoad = App1->loadImage((char *)"images\\GUI\\loadbutton.png");
-	buttonwidth = App1->Button1->w / 2;
-	buttonheight = App1->Button1->h / 2;
+	bool left_correct = App1->append_object(RegularObject(generate_path(DR->returnleft() + 1, path), "left picture", SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
+	bool right_correct = App1->append_object(RegularObject(generate_path(DR->returnright() + 1, path), "right picture", 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
+	bool undo_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigundobutton.png", "undo"));
+	bool save_correct = App1->append_object(RegularObject((char*)"images\\GUI\\savebutton.png", "save"));
+	bool load_correct = App1->append_object(RegularObject((char*)"images\\GUI\\loadbutton.png", "load"));
 	int choice = -1;
-	if (!App1->Image1 || !App1->Image2 || !App1->Button1 || !App1->ButtonSave || !App1->ButtonLoad) {
+	if (!left_correct || !right_correct || !undo_correct || !save_correct || !load_correct) {
 		*plog << "Error: Can't open images\n";
 		throw 0;
 	}
+	RegularObject& button = App1->get_regular("undo");
+	int buttonwidth = button.get_surface()->w / 2;
+	int buttonheight = button.get_surface()->h / 2;
+	button.set_rect(SWIDTH / 2, SHEIGHT - 35, buttonwidth, buttonheight, true);
+	App1->get_regular("save").set_rect(SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, true);
+	App1->get_regular("load").set_rect(3 * SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, true);
 	while (!quit) {
 		SDL_PollEvent(e);
 		switch (e->type) {
@@ -288,18 +296,18 @@ int Application::sort_section() {
 		case SDL_MOUSEBUTTONDOWN:
 		//default:
 			SDL_GetMouseState(&mx, &my);
-			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 2, SHEIGHT - 35)) {
+			if (mouse_is_in_range(mx, my, button)) {
 				*plog << "Button detected\n";
 				if (DR->sort_undo()) {
 					Mix_PlayChannel(-1, App1->quirk2, 0);
 				}
 			}
-			else if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH / 4, SHEIGHT - 35)) {
+			else if (mouse_is_in_range(mx, my, App1->get_regular("save"))) {
 				*plog << "Save button detected\n";
 				DR->save();
 				Mix_PlayChannel(-1, App1->quirk2, 0);
 			}
-			else if (mouseinrange(mx, my, buttonwidth, buttonheight, 3 * SWIDTH / 4, SHEIGHT - 35)) {
+			else if (mouse_is_in_range(mx, my, App1->get_regular("load"))) {
 				*plog << "Load button detected\n";
 				DR->load();
 				Mix_PlayChannel(-1, App1->quirk2, 0);
@@ -317,8 +325,8 @@ int Application::sort_section() {
 			DR->SortingIter(choice);
 			choice = -1;
 			if (!DR->get_status()) {
-				App1->Image1 = App1->loadImage(generatePath(DR->returnleft() + 1, path));
-				App1->Image2 = App1->loadImage(generatePath(DR->returnright() + 1, path));
+				App1->get_regular("left picture").set_surface(generate_path(DR->returnleft() + 1, path));
+				App1->get_regular("right picture").set_surface(generate_path(DR->returnright() + 1, path));
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
 			else { quit = 1; }
@@ -330,11 +338,7 @@ int Application::sort_section() {
 				SDL_SetRenderDrawColor(App1->renders, 0, 0, 0, SDL_ALPHA_OPAQUE);
 				SDL_RenderDrawLine(App1->renders, SWIDTH / 2, 0, SWIDTH / 2, SHEIGHT - 75);
 				SDL_RenderDrawLine(App1->renders, 0, SHEIGHT - 75, SWIDTH, SHEIGHT - 75);
-				App1->renderer(App1->Image1, SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
-				App1->renderer(App1->Image2, 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, 1);
-				App1->renderer(App1->Button1, SWIDTH / 2, SHEIGHT - 35, buttonwidth, buttonheight, 1);
-				App1->renderer(App1->ButtonSave, SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
-				App1->renderer(App1->ButtonLoad, 3 * SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, 1);
+				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
 		}
@@ -342,11 +346,20 @@ int Application::sort_section() {
 	return 2;
 }
 int Application::res_section() {
+	App1->clear_objects();
 	CreateResultsNumeric(*DR);
 	quit = 0;
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
-	App1->Image1 = App1->loadImage((char *)"images\\GUI\\success.png");
-	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
+	bool success_correct = App1->append_object(RegularObject((char*)"images\\GUI\\success.png", "success"));
+	bool button_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigokbutton.png", "ok button"));
+	if (!success_correct || !button_correct) {
+		*plog << "Failed success image (?)\n";
+		throw 0;
+	}
+	RegularObject& button = App1->get_regular("ok button");
+	int buttonwidth = button.get_surface()->w / 2;
+	int buttonheight = button.get_surface()->h / 2;
+	button.set_rect(573, 461, buttonwidth, buttonheight, true);
 	while (!quit) {
 		SDL_PollEvent(e);
 		switch (e->type) {
@@ -354,15 +367,14 @@ int Application::res_section() {
 			quit = 1;
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
-			if (mouseinrange(mx, my, buttonwidth, buttonheight, 573, 461)) {
+			if (mouse_is_in_range(mx, my, button)) {
 				Mix_PlayChannel(-1, App1->quirk, 0);
 				throw 1;
 			}
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_RenderClear(App1->renders);
-				App1->renderer(App1->Image1);
-				App1->renderer(App1->Button1, 573, 461, buttonwidth, buttonheight, 1);
+				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
 		}
@@ -371,24 +383,29 @@ int Application::res_section() {
 }
 
 int Application::single_section() {
+	App1->clear_objects();
 	int i = 0;
 	nfdpathset_t *paths = new nfdpathset_t;
 	nfdresult_t ret;
 	vector<FIBITMAP *> images;
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 	FIBITMAP *num = num_to_image(i);
-	App1->Image2 = App1->loadImage(num);
-	App1->Image1 = App1->loadImage((char *)"images\\GUI\\single.png");
-	App1->ButtonLoad = App1->loadImage((char *)"images\\GUI\\loadbutton.png");
-	App1->Button1 = App1->loadImage((char *)"images\\GUI\\bigokbutton.png");
-	if (!App1->Image1 || !App1->Button1 || !App1->ButtonLoad) {
-		*plog << "Failed sheet image (?)\n";
+	bool single_correct = App1->append_object(RegularObject((char*)"images\\GUI\\single.png", "single"));
+	bool num_correct = App1->append_object(RegularObject(num, "number"));
+	bool load_correct = App1->append_object(RegularObject((char*)"images\\GUI\\loadbutton.png", "load button"));
+	bool ok_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigokbutton.png", "ok button"));
+	if (!num_correct || !single_correct || !load_correct || !ok_correct) {
+		*plog << "Failed images (?)\n";
 		throw 0;
 	}
-	else {
-		buttonwidth = App1->Button1->w;
-		buttonheight = App1->Button1->h;
-	}
+	RegularObject& button = App1->get_regular("ok button");
+	RegularObject& load_button = App1->get_regular("load button");
+	RegularObject& number = App1->get_regular("number");
+	int buttonwidth = button.get_surface()->w / 2;
+	int buttonheight = button.get_surface()->h / 2;
+	button.set_rect(555, 444, buttonwidth / 2, buttonheight / 2, true);
+	number.set_rect(355, 328, number.get_surface()->w / 2, number.get_surface()->h / 2, true);
+	load_button.set_rect(SWIDTH / 2, SHEIGHT / 2, buttonwidth, buttonheight, true);
 	while (!quit) {
 		SDL_PollEvent(e);
 		switch (e->type) {
@@ -396,7 +413,7 @@ int Application::single_section() {
 			quit = 1;
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
-			if (mouseinrange(mx, my, buttonwidth, buttonheight, SWIDTH/2, SHEIGHT/2)) {
+			if (mouse_is_in_range(mx, my, load_button)) {
 				Mix_PlayChannel(-1, App1->quirk, 0);
 				ret = NFD_OpenDialogMultiple("png", "C:", paths);
 				if (ret == 1) {
@@ -421,10 +438,10 @@ int Application::single_section() {
 					i += NFD_PathSet_GetCount(paths);
 					FreeImage_Unload(num);
 					num = num_to_image(i);
-					App1->Image2 = App1->loadImage(num);
+					App1->get_regular("number").set_surface(num);
 				}
 			}
-			if (mouseinrange(mx, my, buttonwidth/2, buttonheight/2, 555, 444)) {
+			if (mouse_is_in_range(mx, my, button)) {
 				Mix_PlayChannel(-1, App1->quirk, 0);
 				ofstream readfile;
 				readfile.open("config.ini");
@@ -437,7 +454,7 @@ int Application::single_section() {
 				}
 				readfile << i << endl;
 				readfile.close();
-				saveresized(images);
+				save_resized(images);
 				for (int j = 0; j < images.size(); j++) {
 					FreeImage_Unload(images[j]);
 				}
@@ -446,10 +463,7 @@ int Application::single_section() {
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
 				SDL_RenderClear(App1->renders);
-				App1->renderer(App1->Image1);
-				App1->renderer(App1->ButtonLoad, SWIDTH/2, SHEIGHT/2, buttonwidth, buttonheight, 1);
-				App1->renderer(App1->Button1, 555, 444, buttonwidth/2, buttonheight/2, 1);
-				App1->renderer(App1->Image2, 355, 328, App1->Image2->w/2, App1->Image2->h/2, 1);
+				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
 		}
@@ -460,11 +474,11 @@ int Application::single_section() {
 	delete paths;
 }
 
-void saveresized(vector<FIBITMAP *> &imgs) {
+void save_resized(vector<FIBITMAP *> &imgs) {
 	FIBITMAP *tmp;
 	int sum_size = 0;
 	int tmpw, tmph;
-	char path[50];
+	char path[MAX_PATH_LEN];
 	if (imgs.size() == 0) {
 		return;
 	}
@@ -482,13 +496,13 @@ void saveresized(vector<FIBITMAP *> &imgs) {
 	try {
 		for (int i = 0; i < imgs.size(); i++) {
 			tmp = FreeImage_Rescale(imgs[i], sum_size, sum_size, FILTER_BILINEAR);
-			generatePath(i + 1, path);
+			generate_path(i + 1, path);
 			FreeImage_Save(FIF_PNG, tmp, path);
 			FreeImage_Unload(tmp);
 		}
 	}
 	catch (...) {
-		plog << "Saveresized caught exception" << endl;
+		plog << "Save_resized caught exception" << endl;
 	}
 }
 
@@ -496,13 +510,13 @@ void CreateResults(Sort &sort) {
 	int LIST_Len = sort.get_size();
 	int w = 0; int h = 0;
 	int sqr = 1 + (int)sqrt(LIST_Len-1);
-	char path[50];
+	char path[MAX_PATH_LEN];
 	int basew = 0, baseh = 0;
 	FIBITMAP *res;
 	try {
 		FIBITMAP **all = new FIBITMAP * [LIST_Len];
 		for (int i = 0; i < LIST_Len; i++) {
-			generatePath(i + 1, path);
+			generate_path(i + 1, path);
 			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
 			if (!w || !h) {
 				basew = FreeImage_GetWidth(all[i]);
@@ -534,7 +548,7 @@ void CreateResultsNumeric(Sort &sort) {
 	int LIST_Len = sort.get_size();
 	int w = 0; int h = 0;
 	int sqr = 1 + (int)sqrt(LIST_Len-1);
-	char path[50];
+	char path[MAX_PATH_LEN];
 	int basew = 0, baseh = 0;
 	int tablw = 0, tablh = 0;
 	FIBITMAP *res;
@@ -542,7 +556,7 @@ void CreateResultsNumeric(Sort &sort) {
 		FIBITMAP **all = new FIBITMAP * [LIST_Len];
 		FIBITMAP **alltabl = new FIBITMAP * [LIST_Len];
 		for (int i = 0; i < LIST_Len; i++) {
-			generatePath(i + 1, path);
+			generate_path(i + 1, path);
 			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
 			if (!w || !h) {
 				w = FreeImage_GetWidth(all[i]) * sqr;
@@ -561,7 +575,7 @@ void CreateResultsNumeric(Sort &sort) {
 			}
 		}
 		catch (...) {
-			plog << "Table Geneation: Smth happened!" << endl;
+			plog << "Table Generation: Smth happened!" << endl;
 		}
 		h += sqr * tablh;
 		baseh += tablh;
@@ -622,7 +636,7 @@ FIBITMAP *num_to_image(int num) {
 	vector<int> truenum = num_to_vector(num);
 	int digits_count = truenum.size();
 	if (digits_count > 10) {
-		plog << "Table: Problem with sizing" << endl;
+		plog << "Table: Problem with number size" << endl;
 	}
 	res = FreeImage_Allocate(digits_count * numsw_each, numsh, 32, 0, 0, 0);
 	for (int i = 0; i < digits_count; i++) {
@@ -658,30 +672,37 @@ vector<int> num_to_vector(int num) {
 	return res;
 }
 
-bool mouseinrange(int &mx, int &my, int w, int h, int posx, int posy) {
+bool mouse_is_in_range(int &mx, int &my, int w, int h, int posx, int posy) {
 	if (mx <= posx + w / 2 && mx >= posx - w / 2 && my >= posy - h / 2 && my <= posy + h / 2) {
 		return 1;
 	}
 	return 0;
 }
 
-char* generatePath(int num, char* to) {
-	char temp[20];
+bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj) {
+	SDL_Rect rect = obj.get_rect();
+	if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
+		return true;
+	}
+	return false;
+}
+
+char* generate_path(int num, char* to) {
 	string path = "images\\";
 	path.append(to_string(num));
 	path.append(".png");
-	strcpy_s(temp, path.c_str());
-	for (int i = 0; i < 20; i++) {
-		to[i] = temp[i];
+	for (int i = 0; i < path.length(); i++) {
+		to[i] = path[i];
 	}
+	to[path.length()] = '\0';
 	return to;
 }
 
 void separate(int size, int row, int columns) {
 	FIBITMAP **imgset = new FIBITMAP * [size];
 	FIBITMAP *from = FreeImage_Load(FIF_PNG, "giantimage.png", PNG_DEFAULT);
-	if (columns == 0 || row == 0) {
-		plog << "Cols, rows cannot be 0" << endl;
+	if (columns <= 0 || row <= 0) {
+		plog << "Cols, rows cannot be <=0" << endl;
 		return;
 	}
 	int width = FreeImage_GetWidth(from) / columns;
@@ -691,16 +712,16 @@ void separate(int size, int row, int columns) {
 		return;
 	}
 	try {
-		char path[50];
+		char path[MAX_PATH_LEN];
 		for (int i = 0; i < size; i++) {
 			imgset[i] = FreeImage_Copy(from, width * (i % columns), (i / columns) * height, width * (i % columns) + width, (i / columns) * height + height);
-			generatePath(i + 1, path);
+			generate_path(i + 1, path);
 			FreeImage_Save(FIF_PNG, imgset[i], path, PNG_DEFAULT);
 		}
 	}
 	catch (...)
 	{
-		plog << "Caught exception. " << endl;
+		plog << "Caught exception" << endl;
 	}
 	FreeImage_Unload(from);
 	for (int i = 0; i < size; i++) {

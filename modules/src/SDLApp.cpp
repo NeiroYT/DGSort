@@ -1,6 +1,6 @@
 #include "SDLApp.h"
 
-SDL_Surface *SDLBase::loadImage(char *path) {
+SDL_Surface *loadImage(char *path) {
 	FREE_IMAGE_FORMAT filetype = FreeImage_GetFileType(path, 0);
 	FIBITMAP *freeimage_bitmap = FreeImage_Load(filetype, path, 0);
 	int is_grayscale = 0;
@@ -15,7 +15,7 @@ SDL_Surface *SDLBase::loadImage(char *path) {
 	return sdl_surface;
 }
 
-SDL_Surface *SDLBase::loadImage(FIBITMAP* freeimage_bitmap) {
+SDL_Surface *loadImage(FIBITMAP* freeimage_bitmap) {
 	int is_grayscale = 0;
 	if (FreeImage_GetColorType(freeimage_bitmap) == FIC_MINISBLACK) {
 		// Single channel so ensure image is compressed to 8-bit.
@@ -28,29 +28,7 @@ SDL_Surface *SDLBase::loadImage(FIBITMAP* freeimage_bitmap) {
 	return sdl_surface;
 }
 
-void SDLBase::renderer(SDL_Surface *surface, int x, int y, int w, int h, bool leftcenter) {
-	if (w <= 0 || h <= 0) {
-		w = surface->w;
-		h = surface->h;
-	}
-	if (x < 0 || y < 0) {
-		x = 0;
-		y = 0;
-	}
-	if (leftcenter) { // your (x,y) is a center of image
-		x -= w / 2;
-		y -= h / 2;
-	}
-	SDL_Rect TmpRect = { x, y, w, h };
-	SDL_Texture *texture = SDL_CreateTextureFromSurface(renders, surface);
-	if (texture == nullptr) {
-		*plog << "Failed to load image as texture\n";
-	}
-	SDL_RenderCopy(renders, texture, nullptr, &TmpRect);
-	SDL_DestroyTexture(texture);
-}
-
-SDL_Surface *SDLBase::get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale) {
+SDL_Surface *get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale) {
 	FreeImage_FlipVertical(freeimage_bitmap);
 	SDL_Surface *sdl_surface = SDL_CreateRGBSurfaceFrom(
 		FreeImage_GetBits(freeimage_bitmap),
@@ -64,7 +42,6 @@ SDL_Surface *SDLBase::get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_graysca
 		4278190080
 	);
 	if (sdl_surface == nullptr) {
-		*plog << "Failed to create surface: " << SDL_GetError() << '\n';
 		return sdl_surface;
 	}
 	if (is_grayscale) {
@@ -79,16 +56,49 @@ SDL_Surface *SDLBase::get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_graysca
 	return sdl_surface;
 }
 
+void SDLBase::render_single(SDL_Surface* surface, int x, int y, int w, int h, bool leftcenter) {
+	if (w <= 0 || h <= 0) {
+		w = surface->w;
+		h = surface->h;
+	}
+	if (x < 0 || y < 0) {
+		x = 0;
+		y = 0;
+	}
+	if (leftcenter) { // your (x,y) is a center of image
+		x -= w / 2;
+		y -= h / 2;
+	}
+	SDL_Rect TmpRect = { x, y, w, h };
+	SDL_Texture* texture = SDL_CreateTextureFromSurface(renders, surface);
+	if (texture == nullptr) {
+		*plog << "Failed to load image as texture\n";
+	}
+	SDL_RenderCopy(renders, texture, nullptr, &TmpRect);
+	SDL_DestroyTexture(texture);
+}
+
+void SDLBase::render() {
+	for (int i = 0; i < objects.size(); i++) {
+		SDL_Texture* texture = SDL_CreateTextureFromSurface(renders, objects[i].get_surface());
+		if (texture == nullptr) {
+			*plog << "Failed to load image as texture\n";
+		}
+		SDL_RenderCopy(renders, texture, nullptr, &objects[i].get_rect());
+		SDL_DestroyTexture(texture);
+	}
+}
+
 void SDLBase::KillAll() {
 	Mix_FreeChunk(quirk);
 	quirk = nullptr;
 	Mix_FreeChunk(quirk2);
 	quirk2 = nullptr;
 	*plog << "Destroyed sfx\n";
-	for (int i = 0; i < (sizeof(Images) / sizeof(Images[0])); i++) {
-		SDL_FreeSurface(Images[i]);
-		Images[i] = nullptr;
+	for (int i = 0; i < objects.size(); i++) {
+		SDL_FreeSurface(objects[i].get_surface());
 	}
+	objects.clear();
 	*plog << "Destroyed images\n";
 	SDL_SetRenderDrawColor(renders, 0xFF, 0xFF, 0xFF, 0xFF);
 	SDL_RenderClear(renders);

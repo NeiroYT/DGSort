@@ -4,34 +4,95 @@
 #include "FreeImage/FreeImage.h"
 #include "SDL_mixer.h"
 #include <fstream>
+#include <string>
+#include <vector>
 
 extern const int SWIDTH;
 extern const int SHEIGHT;
 extern const char App_Name[];
 
+SDL_Surface* get_sdl_surface(FIBITMAP* freeimage_bitmap, int is_grayscale); // freeimage -> sdlsurface
+SDL_Surface* loadImage(char* path);
+SDL_Surface* loadImage(FIBITMAP* freeimage_bitmap);
+
+class RegularObject {
+public:
+	RegularObject() : Image(nullptr), name("none"), rect({ 0, 0, 0, 0 }) {}
+	RegularObject(char* path, std::string name, int x = 0, int y = 0, int w = 0, int h = 0, bool left_or_center = false) {
+		SDL_Surface* surface = loadImage(path);
+		if (w <= 0 || h <= 0) {
+			w = surface->w;
+			h = surface->h;
+		}
+		if (x < 0 || y < 0) {
+			x = 0;
+			y = 0;
+		}
+		if (left_or_center) { // your (x,y) is a center of image
+			x -= w / 2;
+			y -= h / 2;
+		}
+		rect = { x, y, w, h };
+		Image = surface;
+		this->name = name;
+	}
+	RegularObject(FIBITMAP* freeimage_bitmap, std::string name, int x = 0, int y = 0, int w = 0, int h = 0, bool left_or_center = false) {
+		SDL_Surface* surface = loadImage(freeimage_bitmap);
+		if (w <= 0 || h <= 0) {
+			w = surface->w;
+			h = surface->h;
+		}
+		if (x < 0 || y < 0) {
+			x = 0;
+			y = 0;
+		}
+		if (left_or_center) { // your (x,y) is a center of image
+			x -= w / 2;
+			y -= h / 2;
+		}
+		rect = { x, y, w, h };
+		Image = surface;
+		this->name = name;
+	}
+	SDL_Surface* get_surface() { return Image; }
+	void set_surface(char* path) {
+		Image = loadImage(path);
+	}
+	void set_surface(FIBITMAP* freeimage_bitmap) {
+		Image = loadImage(freeimage_bitmap);
+	}
+	SDL_Rect get_rect() const { return rect; }
+	std::string get_name() const { return name; }
+	void set_rect(int x, int y, int w, int h, bool left_or_center) {
+		if (w <= 0 || h <= 0) {
+			w = Image->w;
+			h = Image->h;
+		}
+		if (x < 0 || y < 0) {
+			x = 0;
+			y = 0;
+		}
+		if (left_or_center) { // your (x,y) is a center of image
+			x -= w / 2;
+			y -= h / 2;
+		}
+		rect = { x, y, w, h };
+	}
+private:
+	SDL_Surface* Image;
+	std::string name;
+	SDL_Rect rect;
+};
+
 class SDLBase {
 public:
-	SDL_Surface *Image1;
-	SDL_Surface *Image2;
-	SDL_Surface *Button1;
-	SDL_Surface *ButtonSave;
-	SDL_Surface *ButtonLoad;
-	SDL_Surface *Images[5];
-	SDL_Renderer *renders;
-	Mix_Chunk *quirk;
-	Mix_Chunk *quirk2;
-	SDLBase(std::ofstream &plog) {
+	std::vector<RegularObject> objects;
+	SDL_Renderer* renders;
+	Mix_Chunk* quirk;
+	Mix_Chunk* quirk2;
+	SDLBase(std::ofstream& plog) {
 		window = nullptr;
 		screenSurface = nullptr;
-		Image1 = nullptr;
-		Image2 = nullptr;
-		Button1 = nullptr;
-		ButtonSave = nullptr;
-		ButtonLoad = nullptr;
-		SDL_Surface *tmpImgs[5] = { Image1, Image2, Button1, ButtonSave, ButtonLoad };
-		for (int i = 0; i < 5; i++) {
-			Images[i] = tmpImgs[i];
-		}
 		renders = nullptr;
 		quirk = nullptr;
 		quirk2 = nullptr;
@@ -77,14 +138,51 @@ public:
 	bool get_success_state() const {
 		return success;
 	}
-	SDL_Surface *loadImage(char *path);
-	SDL_Surface *loadImage(FIBITMAP *freeimage_bitmap);
-	void renderer(SDL_Surface *surface, int x = 0, int y = 0, int w = 0, int h = 0, bool leftcenter = 0); // placing images
+	bool append_object(RegularObject& new_object) {
+		if (new_object.get_surface() == nullptr) {
+			return false;
+		}
+		objects.push_back(new_object);
+		return true;
+	}
+	bool remove_object(std::string name) {
+		auto it = std::find_if(objects.begin(), objects.end(),
+			[&](const RegularObject& obj) {
+				return obj.get_name() == name;
+			}
+		);
+		if (it == objects.end()) {
+			*plog << "Regular " << name << " not found\n";
+			return false;
+		}
+		SDL_FreeSurface((*it).get_surface());
+		objects.erase(it);
+		return true;
+	}
+	void clear_objects() {
+		for (int i = 0; i < objects.size(); i++) {
+			SDL_FreeSurface(objects[i].get_surface());
+		}
+		objects.clear();
+	}
+	RegularObject& get_regular(std::string name) {
+		auto it = std::find_if(objects.begin(), objects.end(),
+			[&](const RegularObject& obj) {
+				return obj.get_name() == name;
+			}
+		);
+		if (it == objects.end()) {
+			*plog << "Regular " << name << " not found\n";
+			return RegularObject();
+		}
+		return *it;
+	}
+	void render_single(SDL_Surface* surface, int x = 0, int y = 0, int w = 0, int h = 0, bool leftcenter = 0); // placing image
+	void render();
 	void KillAll();
 private:
-	std::ofstream *plog;
-	SDL_Window *window;
-	SDL_Surface *screenSurface;
+	std::ofstream* plog;
+	SDL_Window* window;
+	SDL_Surface* screenSurface;
 	bool success;
-	SDL_Surface *get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale); // freeimage -> sdlsurface
 };
