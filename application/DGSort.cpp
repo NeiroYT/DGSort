@@ -18,6 +18,7 @@ using namespace std;
 //basic functions
 void separate(int size, int row, int columns); // size - amount of images, row - ysqrnum, columns - xsqrnum
 char* generate_path(int num, char* to);
+char* generate_path_song(std::string song);
 bool mouse_is_in_range(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
 bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
@@ -32,15 +33,45 @@ ofstream plog;
 void CreateResults(Sort& sort);
 void CreateResultsNumeric(Sort &sort);
 
+struct SingleElement {
+public:
+	std::string song;
+	std::string image;
+	std::string text;
+};
+
+std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
+	ifstream readfile;
+	char song_file[260];
+	char text[260];
+	std::vector<SingleElement> result(length);
+	readfile.open(path);
+	if (!readfile) {
+		plog << "Error: " << path << " needs to be with your .exe";
+		throw 0;
+	}
+	for (int i = 0; i < length; i++) {
+		readfile.getline(song_file, 260);
+		readfile.getline(text, 260);
+		SingleElement temp;
+		temp.image = std::to_string(i + 1);
+		temp.song = song_file;
+		temp.text = text;
+		result[i] = temp;
+		readfile.ignore(1000, '\n');
+	}
+	readfile.close();
+	return result;
+}
+
 class Application {
 public:
 	Application() {
-		status = 0; quit = 0; mx = 0; my = 0;
 		DR = nullptr; App1 = nullptr;
 		e = nullptr; plog = nullptr;
 		path[0] = '\0';
 	}
-	int Init(int LIST_Len, ofstream &plog);
+	int Init(int LIST_Len, const std::vector<SingleElement>& elems, ofstream &plog);
 	int Routine();
 private:
 	int menu_section();
@@ -52,6 +83,7 @@ private:
 	bool quit;
 	int mx, my;
 	char path[20];
+	std::vector<SingleElement> elems;
 	Sort *DR;
 	SDL_Event *e;
 	SDLBase *App1;
@@ -60,6 +92,7 @@ private:
 
 int main(int argc, char* argv[]) {
 	int LIST_Len;
+	std::vector<SingleElement> elems;
 	int output;
 	Application a1;
 	plog.open("log.txt", ios::app);
@@ -76,11 +109,12 @@ int main(int argc, char* argv[]) {
 	do {
 		try {
 			LIST_Len = get_len_from_file();
+			elems = get_songs_from_file("songs.ini", LIST_Len);
 		}
 		catch (int i) {
 			return 1;
 		}
-		output = a1.Init(LIST_Len, plog);
+		output = a1.Init(LIST_Len, elems, plog);
 		if (output == 1) {
 			break;
 		}
@@ -115,8 +149,9 @@ int get_len_from_file() {
 	return LIST_Len;
 }
 
-int Application::Init(int LIST_Len, ofstream &plog) {
+int Application::Init(int LIST_Len, const std::vector<SingleElement>& elems, ofstream &plog) {
 	status = 0; quit = 0; mx = 0; my = 0;
+	this->elems = elems;
 	this->plog = &plog;
 	try {
 		if (DR != nullptr) {
@@ -267,6 +302,7 @@ int Application::sheet_section() {
 	throw 0;
 }
 int Application::sort_section() {
+	//SDL_Text
 	App1->clear_objects();
 	if (DR->get_size() < 2) {
 		throw 1;
@@ -314,12 +350,22 @@ int Application::sort_section() {
 			}
 			else {
 				if (mx < SWIDTH / 2 - 5 && my < SHEIGHT - 75) {
-					choice = 0;
-					Mix_PlayChannel(-1, App1->quirk, 0);
+					if (e->button.button == 1) {
+						choice = 0;
+						Mix_PlayChannel(-1, App1->quirk, 0);
+					}
+					else if (elems.size() >= DR->get_size()) {
+						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnleft()].song), NULL, NULL, SW_SHOWNORMAL);
+					}
 				}
 				else if (mx > SWIDTH / 2 + 5 && my < SHEIGHT - 75) {
-					choice = 1;
-					Mix_PlayChannel(-1, App1->quirk, 0);
+					if (e->button.button == 1) {
+						choice = 1;
+						Mix_PlayChannel(-1, App1->quirk, 0);
+					}
+					else if (elems.size() >= DR->get_size()) {
+						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnright()].song), NULL, NULL, SW_SHOWNORMAL);
+					}
 				}
 			}
 			DR->SortingIter(choice);
@@ -691,6 +737,17 @@ char* generate_path(int num, char* to) {
 	string path = "images\\";
 	path.append(to_string(num));
 	path.append(".png");
+	for (int i = 0; i < path.length(); i++) {
+		to[i] = path[i];
+	}
+	to[path.length()] = '\0';
+	return to;
+}
+
+char* generate_path_song(std::string song) {
+	string path = "songs\\";
+	path.append(song);
+	char* to = new char[path.length() + 1];
 	for (int i = 0; i < path.length(); i++) {
 		to[i] = path[i];
 	}
