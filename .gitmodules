@@ -6,3 +6,7 @@
 	path = thirdparty/SDL2_mixer
 	url = https://github.com/libsdl-org/SDL_mixer
 	branch = SDL2
+[submodule "thirdparty/SDL_ttf"]
+	path = thirdparty/SDL_ttf
+	url = https://github.com/libsdl-org/SDL_ttf
+	branch = SDL2
