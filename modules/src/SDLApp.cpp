@@ -57,9 +57,19 @@ SDL_Surface *get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale) {
 }
 
 FIBITMAP* get_fibitmap(SDL_Surface* sdl_surface) {
-	FIBITMAP* fibitmap = FreeImage_ConvertFromRawBits((BYTE*)sdl_surface->pixels, sdl_surface->w, sdl_surface->h, sdl_surface->pitch,
-		sdl_surface->format->BitsPerPixel, sdl_surface->format->Rmask,
-		sdl_surface->format->Gmask, sdl_surface->format->Bmask);
+	SDL_Surface* gray_to_rgb;
+	FIBITMAP* fibitmap;
+	if (sdl_surface->format->palette->ncolors == 256) {
+		gray_to_rgb = SDL_ConvertSurfaceFormat(sdl_surface, SDL_PIXELFORMAT_BGRA32, 1);
+		fibitmap = FreeImage_ConvertFromRawBits((BYTE*)gray_to_rgb->pixels, gray_to_rgb->w, gray_to_rgb->h, gray_to_rgb->pitch,
+			gray_to_rgb->format->BitsPerPixel, gray_to_rgb->format->Rmask,
+			gray_to_rgb->format->Gmask, gray_to_rgb->format->Bmask);
+	}
+	else {
+		fibitmap = FreeImage_ConvertFromRawBits((BYTE*)sdl_surface->pixels, sdl_surface->w, sdl_surface->h, sdl_surface->pitch,
+			sdl_surface->format->BitsPerPixel, sdl_surface->format->Rmask,
+			sdl_surface->format->Gmask, sdl_surface->format->Bmask);
+	}
 	if (fibitmap == nullptr) {
 		return nullptr;
 	}

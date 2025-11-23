@@ -16,6 +16,7 @@ extern const char App_Name[];
 const bool keep_ratio = true;
 
 SDL_Surface* get_sdl_surface(FIBITMAP* freeimage_bitmap, int is_grayscale); // freeimage -> sdlsurface
+FIBITMAP* get_fibitmap(SDL_Surface* sdl_surface); // sdlsurface -> freeimage
 SDL_Surface* loadImage(char* path);
 SDL_Surface* loadImage(FIBITMAP* freeimage_bitmap);
 

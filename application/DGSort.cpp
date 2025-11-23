@@ -24,7 +24,6 @@ char* generate_path_song(std::string song, char* to);
 bool mouse_is_in_range_abs(int &mx, int &my, int x1, int x2, int y1, int y2); // is your mouse here?
 bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
-void init_text(FIBITMAP*& img, std::string text, int w, int h); // generate nice textbox
 vector<int> num_to_vector(int num);
 FIBITMAP *num_to_image(int num);
 void save_resized(vector<FIBITMAP *> &imgs);
@@ -40,9 +39,11 @@ public:
 	std::string text;
 };
 
+void init_text(FIBITMAP**& img, const std::vector<SingleElement>& data, std::string font, int w, int h); // generate nice textbox
+
 void CreateResults(Sort& sort);
 void CreateResultsNumeric(Sort &sort);
-void CreateResultsNumericText(Sort& sort, const std::vector<SingleElement>& data);
+void CreateResultsNumericText(Sort& sort, std::string font, const std::vector<SingleElement>& data);
 
 std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
 	ifstream readfile;
@@ -51,7 +52,6 @@ std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
 	std::vector<SingleElement> result(length);
 	readfile.open(path);
 	if (!readfile) {
-		plog << "Error: " << path << " needs to be with your .exe";
 		throw 0;
 	}
 	for (int i = 0; i < length; i++) {
@@ -125,7 +125,10 @@ int main(int argc, char* argv[]) {
 			elems = get_songs_from_file("songs.ini", LIST_Len);
 		}
 		catch (int i) {
-			return 1;
+			if (i == 1) {
+				elems = std::vector<SingleElement>();
+				return 1;
+			}
 		}
 		output = a1.Init(LIST_Len, elems, plog);
 		if (output == 1) {
@@ -320,13 +323,17 @@ int Application::sort_section() {
 	}
 	std::string font = "times.ttf";
 	SDL_Color black = { 0, 0, 0 };
-	bool left_correct = App1->append_object(RegularObject(generate_path(DR->returnleft() + 1, path), "left picture", SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
-	bool right_correct = App1->append_object(RegularObject(generate_path(DR->returnright() + 1, path), "right picture", 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
+	bool left_correct = App1->append_object(RegularObject(generate_path(DR->returnleft() + 1, path), "left picture", SWIDTH / 4, 5 * SHEIGHT / 12, 300, 300, true));
+	bool right_correct = App1->append_object(RegularObject(generate_path(DR->returnright() + 1, path), "right picture", 3 * SWIDTH / 4, 5 * SHEIGHT / 12, 300, 300, true));
 	bool undo_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigundobutton.png", "undo"));
 	bool save_correct = App1->append_object(RegularObject((char*)"images\\GUI\\savebutton.png", "save"));
 	bool load_correct = App1->append_object(RegularObject((char*)"images\\GUI\\loadbutton.png", "load"));
-	bool text1_correct = App1->append_object(RegularObject(elems[DR->returnleft()].text, font, "text1", 24, black));
-	bool text2_correct = App1->append_object(RegularObject(elems[DR->returnright()].text, font, "text2", 24, black));
+	bool text1_correct = true;
+	bool text2_correct = true;
+	if (elems.size() >= DR->get_size()) {
+		text1_correct = App1->append_object(RegularObject(elems[DR->returnleft()].text, font, "text1", 24, black));
+		text2_correct = App1->append_object(RegularObject(elems[DR->returnright()].text, font, "text2", 24, black));
+	}
 	int choice = -1;
 	if (!left_correct || !right_correct || !undo_correct || !save_correct || !load_correct || !text1_correct || !text2_correct) {
 		*plog << "Error: Can't open images or text\n";
@@ -366,21 +373,21 @@ int Application::sort_section() {
 				Mix_PlayChannel(-1, App1->quirk2, 0);
 			}
 			else {
-				if (mouse_is_in_range_abs(mx, my, 0, SWIDTH / 2 - 5, 0, SHEIGHT - 75)) {
+				if (mouse_is_in_range_abs(mx, my, 0, SWIDTH / 2 - 5, 0, SHEIGHT - 55)) {
 					if (e->button.button == 1) {
 						choice = 0;
 						Mix_PlayChannel(-1, App1->quirk, 0);
 					}
-					else if (elems.size() >= DR->get_size()) {
+					else if (elems.size() >= DR->get_size() && elems[DR->returnleft()].song != "none") {
 						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnleft()].song, path2), NULL, NULL, SW_SHOWNORMAL);
 					}
 				}
-				else if (mouse_is_in_range_abs(mx, my, SWIDTH / 2 + 5, SWIDTH, 0, SHEIGHT - 75)) {
+				else if (mouse_is_in_range_abs(mx, my, SWIDTH / 2 + 5, SWIDTH, 0, SHEIGHT - 55)) {
 					if (e->button.button == 1) {
 						choice = 1;
 						Mix_PlayChannel(-1, App1->quirk, 0);
 					}
-					else if (elems.size() >= DR->get_size()) {
+					else if (elems.size() >= DR->get_size() && elems[DR->returnright()].song != "none") {
 						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnright()].song, path2), NULL, NULL, SW_SHOWNORMAL);
 					}
 				}
@@ -389,9 +396,11 @@ int Application::sort_section() {
 			choice = -1;
 			if (!DR->get_status()) {
 				App1->get_regular("left picture").set_surface(generate_path(DR->returnleft() + 1, path));
-				App1->get_regular("text1").set_surface_text(elems[DR->returnleft()].text, true);
 				App1->get_regular("right picture").set_surface(generate_path(DR->returnright() + 1, path));
-				App1->get_regular("text2").set_surface_text(elems[DR->returnright()].text, true);
+				if (elems.size() >= DR->get_size()) {
+					App1->get_regular("text1").set_surface_text(elems[DR->returnleft()].text, true);
+					App1->get_regular("text2").set_surface_text(elems[DR->returnright()].text, true);
+				}
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
 			else { quit = 1; }
@@ -401,8 +410,8 @@ int Application::sort_section() {
 				SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 				SDL_RenderClear(App1->renders);
 				SDL_SetRenderDrawColor(App1->renders, 0, 0, 0, SDL_ALPHA_OPAQUE);
-				SDL_RenderDrawLine(App1->renders, SWIDTH / 2, 0, SWIDTH / 2, SHEIGHT - 75);
-				SDL_RenderDrawLine(App1->renders, 0, SHEIGHT - 75, SWIDTH, SHEIGHT - 75);
+				SDL_RenderDrawLine(App1->renders, SWIDTH / 2, 0, SWIDTH / 2, SHEIGHT - 55);
+				SDL_RenderDrawLine(App1->renders, 0, SHEIGHT - 55, SWIDTH, SHEIGHT - 55);
 				App1->render();
 				SDL_RenderPresent(App1->renders);
 			}
@@ -412,7 +421,12 @@ int Application::sort_section() {
 }
 int Application::res_section() {
 	App1->clear_objects();
-	CreateResultsNumeric(*DR);
+	if (elems.size() >= DR->get_size()) {
+		CreateResultsNumericText(*DR, "times.ttf", elems);
+	}
+	else {
+		CreateResultsNumeric(*DR);
+	}
 	quit = 0;
 	SDL_SetRenderDrawColor(App1->renders, 255, 255, 255, SDL_ALPHA_OPAQUE);
 	bool success_correct = App1->append_object(RegularObject((char*)"images\\GUI\\success.png", "success"));
@@ -459,16 +473,19 @@ int Application::single_section() {
 	bool num_correct = App1->append_object(RegularObject(num, "number"));
 	bool load_correct = App1->append_object(RegularObject((char*)"images\\GUI\\loadbutton.png", "load button"));
 	bool ok_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigokbutton.png", "ok button"));
-	if (!num_correct || !single_correct || !load_correct || !ok_correct) {
+	bool fill_correct = App1->append_object(RegularObject((char*)"images\\GUI\\fillempty.png", "fill button"));
+	if (!num_correct || !single_correct || !load_correct || !ok_correct || !fill_correct) {
 		*plog << "Failed images (?)\n";
 		throw 0;
 	}
 	RegularObject& button = App1->get_regular("ok button");
 	RegularObject& load_button = App1->get_regular("load button");
+	RegularObject& fill_button = App1->get_regular("fill button");
 	RegularObject& number = App1->get_regular("number");
 	int buttonwidth = button.get_surface()->w / 2;
 	int buttonheight = button.get_surface()->h / 2;
 	button.set_rect(555, 444, buttonwidth / 2, buttonheight / 2, true);
+	fill_button.set_rect(555, 424, buttonwidth / 2, buttonheight / 2, true);
 	number.set_rect(355, 328, number.get_surface()->w / 2, number.get_surface()->h / 2, true);
 	load_button.set_rect(SWIDTH / 2, SHEIGHT / 2, buttonwidth, buttonheight, true);
 	while (!quit) {
@@ -521,9 +538,25 @@ int Application::single_section() {
 				readfile.close();
 				save_resized(images);
 				for (int j = 0; j < images.size(); j++) {
-					FreeImage_Unload(images[j]);
+					if (j == 0) {
+						FreeImage_Unload(images[j]);
+					}
+					else if (images[j] != images[j - 1]) {
+						FreeImage_Unload(images[j]);
+					}
 				}
 				throw 1;
+			}
+			if (mouse_is_in_range(mx, my, fill_button)) {
+				Mix_PlayChannel(-1, App1->quirk, 0);
+				i = DR->get_size() < i ? i : DR->get_size();
+				int id = images.size() - 1;
+				while (images.size() < i) {
+					images.push_back(images[id]);
+				}
+				FreeImage_Unload(num);
+				num = num_to_image(i);
+				App1->get_regular("number").set_surface(num);
 			}
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
@@ -534,7 +567,12 @@ int Application::single_section() {
 		}
 	}
 	for (int j = 0; j < images.size(); j++) {
-		FreeImage_Unload(images[j]);
+		if (j == 0) {
+			FreeImage_Unload(images[j]);
+		}
+		else if (images[j] != images[j - 1]) {
+			FreeImage_Unload(images[j]);
+		}
 	}
 	delete paths;
 }
@@ -666,7 +704,7 @@ void CreateResultsNumeric(Sort &sort) {
 	}
 }
 
-void CreateResultsNumericText(Sort& sort, const std::vector<SingleElement>& data) {
+void CreateResultsNumericText(Sort& sort, std::string font, const std::vector<SingleElement>& data) {
 	int LIST_Len = sort.get_size();
 	int w = 0; int h = 0;
 	int sqr = 1 + (int)sqrt(LIST_Len - 1);
@@ -694,8 +732,8 @@ void CreateResultsNumericText(Sort& sort, const std::vector<SingleElement>& data
 		}
 		tablw = basew;
 		try {
+			init_text(alltext, data, font, tablw, texth);
 			for (int i = 0; i < LIST_Len; i++) {
-				init_text(alltext[i], data[i].text, tablw, texth);
 				init_table(alltabl[i], i + 1, tablw);
 				if (!tablh) {
 					tablh = FreeImage_GetHeight(alltabl[i]);
@@ -758,8 +796,30 @@ void init_table(FIBITMAP* &img, int place, int width) {
 	img = res;
 }
 
-void init_text(FIBITMAP*& img, std::string text, int w, int h) {
-
+void init_text(FIBITMAP**& img, const std::vector<SingleElement>& data, std::string font, int w, int h) {
+	int ptsize = 72;
+	TTF_Font* ttffont = TTF_OpenFont(font.c_str(), ptsize);
+	SDL_Color color = { 0, 0, 0 };
+	SDL_Surface* surface = TTF_RenderText_Solid_Wrapped(ttffont, data[0].text.c_str(), color, w);
+	TTF_CloseFont(ttffont);
+	for (int i = 0; i < data.size(); i++) {
+		ttffont = TTF_OpenFont(font.c_str(), ptsize);
+		surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+		TTF_CloseFont(ttffont);
+		while (surface->h > h) {
+			ptsize -= 2;
+			ttffont = TTF_OpenFont(font.c_str(), ptsize);
+			surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+			TTF_CloseFont(ttffont);
+		}
+		while (surface->h < h / 2) {
+			ptsize += 2;
+			ttffont = TTF_OpenFont(font.c_str(), ptsize);
+			surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+			TTF_CloseFont(ttffont);
+		}
+		img[i] = get_fibitmap(surface);
+	}
 }
 
 FIBITMAP *num_to_image(int num) {
