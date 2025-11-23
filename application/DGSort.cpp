@@ -1,6 +1,8 @@
 ﻿#define SDL_MAIN_HANDLED
 const int SWIDTH = 640;
+const int CURWIDTH = 1280;
 const int SHEIGHT = 480;
+const int CURHEIGHT = 960;
 const int MAX_PATH_LEN = 50;
 const char App_Name[] = "Things Sorting Machine";
 
@@ -18,10 +20,11 @@ using namespace std;
 //basic functions
 void separate(int size, int row, int columns); // size - amount of images, row - ysqrnum, columns - xsqrnum
 char* generate_path(int num, char* to);
-char* generate_path_song(std::string song);
-bool mouse_is_in_range(int &mx, int &my, int w, int h, int posx, int posy); // is your mouse here?
+char* generate_path_song(std::string song, char* to);
+bool mouse_is_in_range_abs(int &mx, int &my, int x1, int x2, int y1, int y2); // is your mouse here?
 bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj); // is your mouse here?
 void init_table(FIBITMAP* &img, int place, int width); // generate table with a number
+void init_text(FIBITMAP*& img, std::string text, int w, int h); // generate nice textbox
 vector<int> num_to_vector(int num);
 FIBITMAP *num_to_image(int num);
 void save_resized(vector<FIBITMAP *> &imgs);
@@ -30,15 +33,16 @@ int get_len_from_file();
 //int LIST_Len; // SORT NUMBER (num of images)
 ofstream plog;
 
-void CreateResults(Sort& sort);
-void CreateResultsNumeric(Sort &sort);
-
 struct SingleElement {
 public:
 	std::string song;
 	std::string image;
 	std::string text;
 };
+
+void CreateResults(Sort& sort);
+void CreateResultsNumeric(Sort &sort);
+void CreateResultsNumericText(Sort& sort, const std::vector<SingleElement>& data);
 
 std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
 	ifstream readfile;
@@ -70,6 +74,7 @@ public:
 		DR = nullptr; App1 = nullptr;
 		e = nullptr; plog = nullptr;
 		path[0] = '\0';
+		path2[0] = '\0';
 	}
 	int Init(int LIST_Len, const std::vector<SingleElement>& elems, ofstream &plog);
 	int Routine();
@@ -82,7 +87,8 @@ private:
 	int status;
 	bool quit;
 	int mx, my;
-	char path[20];
+	char path[MAX_PATH_LEN];
+	char path2[2 * MAX_PATH_LEN];
 	std::vector<SingleElement> elems;
 	Sort *DR;
 	SDL_Event *e;
@@ -103,6 +109,13 @@ int main(int argc, char* argv[]) {
 	}
 	catch (...) {
 		plog << "FreeImage not working.\n";
+		return 1;
+	}
+	try {
+		TTF_Init();
+	}
+	catch (...) {
+		plog << "TTF not working.\n";
 		return 1;
 	}
 	plog << "Starting App...\n";
@@ -206,7 +219,7 @@ int Application::Routine() {
 
 int Application::menu_section() {
 	App1->clear_objects();
-	bool menu_correct = App1->append_object(RegularObject((char*)"images\\GUI\\menu.png", "menu"));
+	bool menu_correct = App1->append_object(RegularObject((char*)"images\\GUI\\menu.png", "menu", 0, 0));
 	if (!menu_correct) {
 		*plog << "Error: Failed menu (?)\n";
 	}
@@ -220,19 +233,17 @@ int Application::menu_section() {
 		case SDL_MOUSEBUTTONDOWN:
 			SDL_GetMouseState(&mx, &my);
 			// png menu
-			if (mx >= 386 && mx <= 614) {
-				if (my >= 148 && my <= 203) {
-					status = 1;
-					Mix_PlayChannel(-1, App1->quirk, 0);
-				}
-				else if (my >= 248 && my <= 303) {
-					status = 2;
-					Mix_PlayChannel(-1, App1->quirk, 0);
-				}
-				else if (my >= 348 && my <= 403) {
-					status = 3;
-					Mix_PlayChannel(-1, App1->quirk, 0);
-				}
+			if (mouse_is_in_range_abs(mx, my, 386, 614, 148, 203)) {
+				status = 1;
+				Mix_PlayChannel(-1, App1->quirk, 0);
+			}
+			else if (mouse_is_in_range_abs(mx, my, 386, 614, 248, 303)) {
+				status = 2;
+				Mix_PlayChannel(-1, App1->quirk, 0);
+			}
+			else if (mouse_is_in_range_abs(mx, my, 386, 614, 348, 403)) {
+				status = 3;
+				Mix_PlayChannel(-1, App1->quirk, 0);
 			}
 			//
 			break;
@@ -307,14 +318,18 @@ int Application::sort_section() {
 	if (DR->get_size() < 2) {
 		throw 1;
 	}
+	std::string font = "times.ttf";
+	SDL_Color black = { 0, 0, 0 };
 	bool left_correct = App1->append_object(RegularObject(generate_path(DR->returnleft() + 1, path), "left picture", SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
 	bool right_correct = App1->append_object(RegularObject(generate_path(DR->returnright() + 1, path), "right picture", 3 * SWIDTH / 4, SHEIGHT / 2, 300, 300, true));
 	bool undo_correct = App1->append_object(RegularObject((char*)"images\\GUI\\bigundobutton.png", "undo"));
 	bool save_correct = App1->append_object(RegularObject((char*)"images\\GUI\\savebutton.png", "save"));
 	bool load_correct = App1->append_object(RegularObject((char*)"images\\GUI\\loadbutton.png", "load"));
+	bool text1_correct = App1->append_object(RegularObject(elems[DR->returnleft()].text, font, "text1", 24, black));
+	bool text2_correct = App1->append_object(RegularObject(elems[DR->returnright()].text, font, "text2", 24, black));
 	int choice = -1;
-	if (!left_correct || !right_correct || !undo_correct || !save_correct || !load_correct) {
-		*plog << "Error: Can't open images\n";
+	if (!left_correct || !right_correct || !undo_correct || !save_correct || !load_correct || !text1_correct || !text2_correct) {
+		*plog << "Error: Can't open images or text\n";
 		throw 0;
 	}
 	RegularObject& button = App1->get_regular("undo");
@@ -323,6 +338,8 @@ int Application::sort_section() {
 	button.set_rect(SWIDTH / 2, SHEIGHT - 35, buttonwidth, buttonheight, true);
 	App1->get_regular("save").set_rect(SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, true);
 	App1->get_regular("load").set_rect(3 * SWIDTH / 4, SHEIGHT - 35, buttonwidth, buttonheight, true);
+	App1->get_regular("text1").set_rect_text(SWIDTH / 4, SHEIGHT - 95, SWIDTH / 2, true);
+	App1->get_regular("text2").set_rect_text(3 * SWIDTH / 4, SHEIGHT - 95, SWIDTH / 2, true);
 	while (!quit) {
 		SDL_PollEvent(e);
 		switch (e->type) {
@@ -349,22 +366,22 @@ int Application::sort_section() {
 				Mix_PlayChannel(-1, App1->quirk2, 0);
 			}
 			else {
-				if (mx < SWIDTH / 2 - 5 && my < SHEIGHT - 75) {
+				if (mouse_is_in_range_abs(mx, my, 0, SWIDTH / 2 - 5, 0, SHEIGHT - 75)) {
 					if (e->button.button == 1) {
 						choice = 0;
 						Mix_PlayChannel(-1, App1->quirk, 0);
 					}
 					else if (elems.size() >= DR->get_size()) {
-						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnleft()].song), NULL, NULL, SW_SHOWNORMAL);
+						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnleft()].song, path2), NULL, NULL, SW_SHOWNORMAL);
 					}
 				}
-				else if (mx > SWIDTH / 2 + 5 && my < SHEIGHT - 75) {
+				else if (mouse_is_in_range_abs(mx, my, SWIDTH / 2 + 5, SWIDTH, 0, SHEIGHT - 75)) {
 					if (e->button.button == 1) {
 						choice = 1;
 						Mix_PlayChannel(-1, App1->quirk, 0);
 					}
 					else if (elems.size() >= DR->get_size()) {
-						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnright()].song), NULL, NULL, SW_SHOWNORMAL);
+						HINSTANCE result = ShellExecute(NULL, "open", generate_path_song(elems[DR->returnright()].song, path2), NULL, NULL, SW_SHOWNORMAL);
 					}
 				}
 			}
@@ -372,7 +389,9 @@ int Application::sort_section() {
 			choice = -1;
 			if (!DR->get_status()) {
 				App1->get_regular("left picture").set_surface(generate_path(DR->returnleft() + 1, path));
+				App1->get_regular("text1").set_surface_text(elems[DR->returnleft()].text, true);
 				App1->get_regular("right picture").set_surface(generate_path(DR->returnright() + 1, path));
+				App1->get_regular("text2").set_surface_text(elems[DR->returnright()].text, true);
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
 			else { quit = 1; }
@@ -647,6 +666,72 @@ void CreateResultsNumeric(Sort &sort) {
 	}
 }
 
+void CreateResultsNumericText(Sort& sort, const std::vector<SingleElement>& data) {
+	int LIST_Len = sort.get_size();
+	int w = 0; int h = 0;
+	int sqr = 1 + (int)sqrt(LIST_Len - 1);
+	char path[MAX_PATH_LEN];
+	int basew = 0, baseh = 0;
+	int imgh = 0;
+	int texth = 0;
+	int tablw = 0, tablh = 0;
+	FIBITMAP* res;
+	try {
+		FIBITMAP** all = new FIBITMAP * [LIST_Len];
+		FIBITMAP** alltabl = new FIBITMAP * [LIST_Len];
+		FIBITMAP** alltext = new FIBITMAP * [LIST_Len];
+		for (int i = 0; i < LIST_Len; i++) {
+			generate_path(i + 1, path);
+			all[i] = FreeImage_Load(FIF_PNG, path, PNG_DEFAULT);
+			if (!w || !h) {
+				w = FreeImage_GetWidth(all[i]) * sqr;
+				basew = FreeImage_GetWidth(all[i]);
+				h = FreeImage_GetHeight(all[i]) * sqr;
+				baseh = FreeImage_GetHeight(all[i]);
+				imgh = FreeImage_GetHeight(all[i]);
+				texth = baseh / 2;
+			}
+		}
+		tablw = basew;
+		try {
+			for (int i = 0; i < LIST_Len; i++) {
+				init_text(alltext[i], data[i].text, tablw, texth);
+				init_table(alltabl[i], i + 1, tablw);
+				if (!tablh) {
+					tablh = FreeImage_GetHeight(alltabl[i]);
+				}
+			}
+		}
+		catch (...) {
+			plog << "Table Generation: Smth happened!" << endl;
+		}
+		h += sqr * (tablh + texth);
+		baseh += tablh + texth;
+		res = FreeImage_Allocate(w, h, 32, 0, 0, 0);
+		SortList Res = sort.getFinalSort();
+		for (int i = 0; i < LIST_Len; i++) {
+			//res.composite(all[Res.getelem(i)], all[0].columns() * (i % sqr), (i / sqr) * all[0].rows());
+			plog << Res.getelem(i) << " - " << FreeImage_Paste(res, alltabl[i], basew * (i % sqr), baseh * (i / sqr), 255) << " - ";
+			plog << FreeImage_Paste(res, all[Res.getelem(i)], basew * (i % sqr), baseh * (i / sqr) + tablh, 255) << endl;
+			plog << FreeImage_Paste(res, alltext[Res.getelem(i)], basew * (i % sqr), baseh * (i / sqr) + tablh + imgh, 255) << endl;
+		}
+		FreeImage_Save(FIF_PNG, res, "result.png", PNG_DEFAULT);
+		plog << "Result.png was created!\n";
+		for (int i = 0; i < LIST_Len; i++) {
+			FreeImage_Unload(alltext[i]);
+			FreeImage_Unload(alltabl[i]);
+			FreeImage_Unload(all[i]);
+		}
+		delete[] alltext;
+		delete[] alltabl;
+		delete[] all;
+		FreeImage_Unload(res);
+	}
+	catch (...) {
+		plog << "Error: Problem with either \"images/N.png\" files or \"result\".png!\n";
+	}
+}
+
 void init_table(FIBITMAP* &img, int place, int width) {
 	vector<int> truenum;
 	FIBITMAP *nums = FreeImage_Load(FIF_PNG, "images\\GUI\\numbers.png", PNG_DEFAULT);
@@ -671,6 +756,10 @@ void init_table(FIBITMAP* &img, int place, int width) {
 	FreeImage_Unload(tempmask);
 	FreeImage_Unload(nums);
 	img = res;
+}
+
+void init_text(FIBITMAP*& img, std::string text, int w, int h) {
+
 }
 
 FIBITMAP *num_to_image(int num) {
@@ -718,16 +807,23 @@ vector<int> num_to_vector(int num) {
 	return res;
 }
 
-bool mouse_is_in_range(int &mx, int &my, int w, int h, int posx, int posy) {
-	if (mx <= posx + w / 2 && mx >= posx - w / 2 && my >= posy - h / 2 && my <= posy + h / 2) {
-		return 1;
-	}
-	return 0;
-}
-
 bool mouse_is_in_range(int& mx, int& my, const RegularObject& obj) {
 	SDL_Rect rect = obj.get_rect();
+	rect.x *= (float)CURWIDTH / SWIDTH;
+	rect.y *= (float)CURHEIGHT / SHEIGHT;
+	rect.w *= (float)CURWIDTH / SWIDTH;
+	rect.h *= (float)CURHEIGHT / SHEIGHT;
 	if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
+		return true;
+	}
+	return false;
+}
+
+bool mouse_is_in_range_abs(int& mx, int& my, int x1, int x2, int y1, int y2) {
+	if (mx >= (int)((double)x1 / SWIDTH * CURWIDTH) &&
+		mx <= (int)((double)x2 / SWIDTH * CURWIDTH) &&
+		my >= (int)((double)y1 / SHEIGHT * CURHEIGHT) &&
+		my <= (int)((double)y2 / SHEIGHT * CURHEIGHT)) {
 		return true;
 	}
 	return false;
@@ -744,10 +840,16 @@ char* generate_path(int num, char* to) {
 	return to;
 }
 
-char* generate_path_song(std::string song) {
+char* generate_path_song(std::string song, char* to) {
+	if (song.substr(0, 4) == "http") {
+		for (int i = 0; i < song.length(); i++) {
+			to[i] = song[i];
+		}
+		to[song.length()] = '\0';
+		return to;
+	}
 	string path = "songs\\";
 	path.append(song);
-	char* to = new char[path.length() + 1];
 	for (int i = 0; i < path.length(); i++) {
 		to[i] = path[i];
 	}

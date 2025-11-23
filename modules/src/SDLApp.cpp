@@ -56,6 +56,17 @@ SDL_Surface *get_sdl_surface(FIBITMAP *freeimage_bitmap, int is_grayscale) {
 	return sdl_surface;
 }
 
+FIBITMAP* get_fibitmap(SDL_Surface* sdl_surface) {
+	FIBITMAP* fibitmap = FreeImage_ConvertFromRawBits((BYTE*)sdl_surface->pixels, sdl_surface->w, sdl_surface->h, sdl_surface->pitch,
+		sdl_surface->format->BitsPerPixel, sdl_surface->format->Rmask,
+		sdl_surface->format->Gmask, sdl_surface->format->Bmask);
+	if (fibitmap == nullptr) {
+		return nullptr;
+	}
+	FreeImage_FlipVertical(fibitmap);
+	return fibitmap;
+}
+
 void SDLBase::render_single(SDL_Surface* surface, int x, int y, int w, int h, bool leftcenter) {
 	if (w <= 0 || h <= 0) {
 		w = surface->w;
@@ -97,6 +108,9 @@ void SDLBase::KillAll() {
 	*plog << "Destroyed sfx\n";
 	for (int i = 0; i < objects.size(); i++) {
 		SDL_FreeSurface(objects[i].get_surface());
+		if (objects[i].get_font() != nullptr) {
+			TTF_CloseFont(objects[i].get_font());
+;		}
 	}
 	objects.clear();
 	*plog << "Destroyed images\n";
