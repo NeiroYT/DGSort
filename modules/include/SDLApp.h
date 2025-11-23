@@ -22,10 +22,9 @@ SDL_Surface* loadImage(FIBITMAP* freeimage_bitmap);
 
 class RegularObject {
 public:
-	RegularObject() : Image(nullptr), ttffont(nullptr), name("none"), ttftext(""), rect({0, 0, 0, 0}) {}
+	RegularObject() : Image(nullptr), ttffont(nullptr), name("none"), rect({0, 0, 0, 0}) {}
 	RegularObject(char* path, std::string name, int x = 0, int y = 0, int w = 0, int h = 0, bool left_or_center = false) {
 		ttffont = nullptr;
-		ttftext = "";
 		SDL_Surface* surface = loadImage(path);
 		if (w <= 0 || h <= 0) {
 			w = surface->w;
@@ -43,7 +42,7 @@ public:
 		Image = surface;
 		this->name = name;
 	}
-	RegularObject(std::string text, std::string font, std::string name, int size, SDL_Color color, int x = 0, int y = 0, int w = 0, bool left_or_center = false) {
+	RegularObject(std::wstring text, std::string font, std::string name, int size, SDL_Color color, int x = 0, int y = 0, int w = 0, bool left_or_center = false) {
 		this->color = color;
 		this->ttffont = TTF_OpenFont(font.c_str(), size);
 		this->wrap_width = w;
@@ -53,11 +52,11 @@ public:
 		}
 		SDL_Surface* surface;
 		if (w <= 0) {
-			surface = TTF_RenderText_Solid(ttffont, text.c_str(), color);
+			surface = TTF_RenderUNICODE_Solid(ttffont, (const Uint16*)text.c_str(), color);
 			w = surface->w;
 		}
 		else {
-			surface = TTF_RenderText_Solid_Wrapped(ttffont, text.c_str(), color, w);
+			surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)text.c_str(), color, w);
 		}
 		if (x < 0 || y < 0) {
 			x = 0;
@@ -73,7 +72,6 @@ public:
 	}
 	RegularObject(FIBITMAP* freeimage_bitmap, std::string name, int x = 0, int y = 0, int w = 0, int h = 0, bool left_or_center = false) {
 		ttffont = nullptr;
-		ttftext = "";
 		SDL_Surface* surface = loadImage(freeimage_bitmap);
 		if (w <= 0 || h <= 0) {
 			w = surface->w;
@@ -94,16 +92,16 @@ public:
 	SDL_Surface* get_surface() { return Image; }
 	TTF_Font* get_font() { return ttffont; }
 	void set_surface(char* path) {
-		if (ttftext != "") {
+		if (!ttftext.empty()) {
 			return;
 		}
 		SDL_FreeSurface(Image);
 		Image = loadImage(path);
 	}
-	void set_surface_text(std::string new_text, bool left_or_center) {
+	void set_surface_text(std::wstring new_text, bool left_or_center) {
 		this->ttftext = new_text;
 		int old_w = Image->w;
-		SDL_Surface* surface = TTF_RenderText_Solid_Wrapped(ttffont, ttftext.c_str(), color, wrap_width);
+		SDL_Surface* surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)ttftext.c_str(), color, wrap_width);
 		SDL_FreeSurface(Image);
 		Image = surface;
 		if (!left_or_center) {
@@ -120,7 +118,7 @@ public:
 	SDL_Rect get_rect() const { return rect; }
 	std::string get_name() const { return name; }
 	void set_rect(int x, int y, int w, int h, bool left_or_center) {
-		if (ttftext != "") {
+		if (!ttftext.empty()) {
 			return;
 		}
 		if (w <= 0 || h <= 0) {
@@ -146,7 +144,7 @@ public:
 			y = 0;
 		}
 		if (w != wrap_width) {
-			SDL_Surface* surface = TTF_RenderText_Solid_Wrapped(ttffont, ttftext.c_str(), color, w);
+			SDL_Surface* surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)ttftext.c_str(), color, w);
 			SDL_FreeSurface(Image);
 			Image = surface;
 			wrap_width = w;
@@ -162,7 +160,7 @@ private:
 	std::string name;
 	SDL_Rect rect;
 	TTF_Font* ttffont;
-	std::string ttftext;
+	std::wstring ttftext;
 	int wrap_width;
 	SDL_Color color;
 };

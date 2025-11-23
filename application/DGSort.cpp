@@ -36,7 +36,7 @@ struct SingleElement {
 public:
 	std::string song;
 	std::string image;
-	std::string text;
+	std::wstring text;
 };
 
 void init_text(FIBITMAP**& img, const std::vector<SingleElement>& data, std::string font, int w, int h); // generate nice textbox
@@ -49,6 +49,7 @@ std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
 	ifstream readfile;
 	char song_file[260];
 	char text[260];
+	wchar_t* inputstring;
 	std::vector<SingleElement> result(length);
 	readfile.open(path);
 	if (!readfile) {
@@ -57,12 +58,20 @@ std::vector<SingleElement> get_songs_from_file(const char* path, int length) {
 	for (int i = 0; i < length; i++) {
 		readfile.getline(song_file, 260);
 		readfile.getline(text, 260);
+		readfile.ignore(1000, '\n');
+		std::string text_s = text;
+		// text may be unicode
+		inputstring = new wchar_t[text_s.length() + 1];
+		size_t wstring_len;
+		wstring_len = MultiByteToWideChar(CP_UTF8, 0, &text_s[0], text_s.length(), inputstring, text_s.length());
+		inputstring[wstring_len] = L'\0';
+		//
 		SingleElement temp;
 		temp.image = std::to_string(i + 1);
 		temp.song = song_file;
-		temp.text = text;
+		temp.text = inputstring;
+		delete[] inputstring;
 		result[i] = temp;
-		readfile.ignore(1000, '\n');
 	}
 	readfile.close();
 	return result;
@@ -798,24 +807,23 @@ void init_table(FIBITMAP* &img, int place, int width) {
 
 void init_text(FIBITMAP**& img, const std::vector<SingleElement>& data, std::string font, int w, int h) {
 	int ptsize = 72;
-	TTF_Font* ttffont = TTF_OpenFont(font.c_str(), ptsize);
+	TTF_Font* ttffont;
 	SDL_Color color = { 0, 0, 0 };
-	SDL_Surface* surface = TTF_RenderText_Solid_Wrapped(ttffont, data[0].text.c_str(), color, w);
-	TTF_CloseFont(ttffont);
+	SDL_Surface* surface;
 	for (int i = 0; i < data.size(); i++) {
 		ttffont = TTF_OpenFont(font.c_str(), ptsize);
-		surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+		surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)data[i].text.c_str(), color, w);
 		TTF_CloseFont(ttffont);
 		while (surface->h > h) {
 			ptsize -= 2;
 			ttffont = TTF_OpenFont(font.c_str(), ptsize);
-			surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+			surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)data[i].text.c_str(), color, w);
 			TTF_CloseFont(ttffont);
 		}
 		while (surface->h < h / 2) {
 			ptsize += 2;
 			ttffont = TTF_OpenFont(font.c_str(), ptsize);
-			surface = TTF_RenderText_Solid_Wrapped(ttffont, data[i].text.c_str(), color, w);
+			surface = TTF_RenderUNICODE_Solid_Wrapped(ttffont, (const Uint16*)data[i].text.c_str(), color, w);
 			TTF_CloseFont(ttffont);
 		}
 		img[i] = get_fibitmap(surface);
