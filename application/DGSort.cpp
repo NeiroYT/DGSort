@@ -402,8 +402,7 @@ int Application::sort_section() {
 				}
 			}
 			DR->SortingIter(choice);
-			choice = -1;
-			if (!DR->get_status()) {
+			if (!DR->get_status() && choice != -1) {
 				App1->get_regular("left picture").set_surface(generate_path(DR->returnleft() + 1, path));
 				App1->get_regular("right picture").set_surface(generate_path(DR->returnright() + 1, path));
 				if (elems.size() >= DR->get_size()) {
@@ -412,7 +411,10 @@ int Application::sort_section() {
 				}
 				*plog << "Doing (" << DR->returnleft() << "), (" << DR->returnright() << ") choice\n";
 			}
-			else { quit = 1; }
+			choice = -1;
+			if (DR->get_status()) {
+				quit = 1;
+			}
 			break;
 		default:
 			if (!(SDL_GetTicks() % 15)) { // realization with (time mod [1000/fps]) ~62.5 fps
